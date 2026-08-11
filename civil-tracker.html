@@ -118,6 +118,16 @@
 
   <div id="topbar">
     <div class="filter-group">
+      <span class="filter-label">Cost Center</span>
+      <input id="filterCostCenter" class="filter-input" type="text" list="costCenterList" placeholder="All cost centers" autocomplete="off">
+      <datalist id="costCenterList"></datalist>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">CTR#</span>
+      <input id="filterCtrNum" class="filter-input" type="text" list="ctrNumList" placeholder="All CTR#" autocomplete="off">
+      <datalist id="ctrNumList"></datalist>
+    </div>
+    <div class="filter-group">
       <span class="filter-label">Project</span>
       <input id="filterProject" class="filter-input" type="text" list="projectList" placeholder="All projects" autocomplete="off">
       <datalist id="projectList"></datalist>
@@ -216,6 +226,8 @@
         document.getElementById(listId).innerHTML =
           values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
       };
+      fill('costCenterList', uniq(function (r) { return r.costCenter; }));
+      fill('ctrNumList', uniq(function (r) { return r.ctrNum; }));
       fill('projectList', uniq(function (r) { return r.project; }));
       fill('refList', uniq(function (r) { return r.foundationRef; }));
       fill('componentList', uniq(function (r) { return r.component; }));
@@ -223,7 +235,7 @@
 
     function renderHead() {
       const head = document.getElementById('headRow');
-      let html = '<th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
+      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th>Overall %</th><th>Status</th>';
       head.innerHTML = html;
@@ -239,11 +251,15 @@
 
         const tr = document.createElement('tr');
         tr.dataset.row = r.row;
+        tr.dataset.costCenter = (r.costCenter || '').toLowerCase();
+        tr.dataset.ctrNum = (r.ctrNum || '').toLowerCase();
         tr.dataset.project = (r.project || '').toLowerCase();
         tr.dataset.ref = (r.foundationRef || '').toLowerCase();
         tr.dataset.component = (r.component || '').toLowerCase();
 
-        let html = '<td class="left">' + escapeHtml(r.project) + '</td>';
+        let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.project) + '</td>';
         html += '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
@@ -381,11 +397,15 @@
     }
 
     function applyFilters() {
+      const qCostCenter = document.getElementById('filterCostCenter').value.toLowerCase();
+      const qCtrNum = document.getElementById('filterCtrNum').value.toLowerCase();
       const qProject = document.getElementById('filterProject').value.toLowerCase();
       const qRef = document.getElementById('filterRef').value.toLowerCase();
       const qComponent = document.getElementById('filterComponent').value.toLowerCase();
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         const matches =
+          tr.dataset.costCenter.indexOf(qCostCenter) !== -1 &&
+          tr.dataset.ctrNum.indexOf(qCtrNum) !== -1 &&
           tr.dataset.project.indexOf(qProject) !== -1 &&
           tr.dataset.ref.indexOf(qRef) !== -1 &&
           tr.dataset.component.indexOf(qComponent) !== -1;
@@ -393,7 +413,7 @@
       });
     }
 
-    ['filterProject', 'filterRef', 'filterComponent'].forEach(function (id) {
+    ['filterCostCenter', 'filterCtrNum', 'filterProject', 'filterRef', 'filterComponent'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', applyFilters);
     });
 
