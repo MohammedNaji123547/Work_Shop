@@ -44,14 +44,17 @@
     top: 0;
     z-index: 5;
   }
-  #search {
+  .filter-input {
     flex: 1;
-    min-width: 180px;
+    min-width: 140px;
     padding: 7px 10px;
     border: 1px solid var(--border);
     border-radius: 5px;
     font-size: 13px;
+    font-family: Arial, Helvetica, sans-serif;
   }
+  .filter-label { font-size: 11px; color: var(--grey); margin-bottom: 2px; }
+  .filter-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
   .progress-pill {
     background: var(--navy-light);
     border-radius: 20px;
@@ -114,7 +117,21 @@
   </header>
 
   <div id="topbar">
-    <input id="search" type="text" placeholder="Search by Foundation Ref...">
+    <div class="filter-group">
+      <span class="filter-label">Project</span>
+      <input id="filterProject" class="filter-input" type="text" list="projectList" placeholder="All projects" autocomplete="off">
+      <datalist id="projectList"></datalist>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Foundation Ref.</span>
+      <input id="filterRef" class="filter-input" type="text" list="refList" placeholder="All refs" autocomplete="off">
+      <datalist id="refList"></datalist>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Component</span>
+      <input id="filterComponent" class="filter-input" type="text" list="componentList" placeholder="All components" autocomplete="off">
+      <datalist id="componentList"></datalist>
+    </div>
     <span id="dateLabel">Update date:</span>
     <input id="updateDate" type="date">
     <div id="status">Loading...</div>
@@ -182,15 +199,31 @@
       ROWS = data.rows;
       renderHead();
       renderBody();
+      populateFilterOptions();
       updateOverallPill();
       document.getElementById('loading').style.display = 'none';
       document.getElementById('boqTable').style.display = 'table';
       setStatus('Loaded. No unsaved changes.', '');
     }
 
+    function populateFilterOptions() {
+      const uniq = function (getter) {
+        const set = new Set();
+        ROWS.forEach(function (r) { const v = getter(r); if (v) set.add(v); });
+        return Array.from(set).sort();
+      };
+      const fill = function (listId, values) {
+        document.getElementById(listId).innerHTML =
+          values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+      };
+      fill('projectList', uniq(function (r) { return r.project; }));
+      fill('refList', uniq(function (r) { return r.foundationRef; }));
+      fill('componentList', uniq(function (r) { return r.component; }));
+    }
+
     function renderHead() {
       const head = document.getElementById('headRow');
-      let html = '<th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
+      let html = '<th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th>Overall %</th><th>Status</th>';
       head.innerHTML = html;
@@ -202,9 +235,12 @@
       ROWS.forEach(function (r) {
         const tr = document.createElement('tr');
         tr.dataset.row = r.row;
+        tr.dataset.project = (r.project || '').toLowerCase();
         tr.dataset.ref = (r.foundationRef || '').toLowerCase();
+        tr.dataset.component = (r.component || '').toLowerCase();
 
-        let html = '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
+        let html = '<td class="left">' + escapeHtml(r.project) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
 
@@ -315,11 +351,21 @@
       });
     }
 
-    document.getElementById('search').addEventListener('input', function (e) {
-      const q = e.target.value.toLowerCase();
+    function applyFilters() {
+      const qProject = document.getElementById('filterProject').value.toLowerCase();
+      const qRef = document.getElementById('filterRef').value.toLowerCase();
+      const qComponent = document.getElementById('filterComponent').value.toLowerCase();
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
-        tr.style.display = tr.dataset.ref.indexOf(q) !== -1 ? '' : 'none';
+        const matches =
+          tr.dataset.project.indexOf(qProject) !== -1 &&
+          tr.dataset.ref.indexOf(qRef) !== -1 &&
+          tr.dataset.component.indexOf(qComponent) !== -1;
+        tr.style.display = matches ? '' : 'none';
       });
+    }
+
+    ['filterProject', 'filterRef', 'filterComponent'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', applyFilters);
     });
 
     load();
