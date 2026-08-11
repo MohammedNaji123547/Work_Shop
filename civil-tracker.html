@@ -233,6 +233,10 @@
       const body = document.getElementById('boqBody');
       body.innerHTML = '';
       ROWS.forEach(function (r) {
+        // Keep the actual stored values as the source of truth for saving/
+        // calculating, separate from what's shown in the (blank) inputs.
+        r.originalSteps = r.steps.slice();
+
         const tr = document.createElement('tr');
         tr.dataset.row = r.row;
         tr.dataset.project = (r.project || '').toLowerCase();
@@ -247,9 +251,11 @@
         const applicable = applicableSteps(r.component);
         for (let s = 0; s < STEP_COUNT; s++) {
           const isApplicable = applicable.indexOf(s) !== -1;
-          const val = Math.round((r.steps[s] || 0) * 100);
+          const currentVal = Math.round((r.steps[s] || 0) * 100);
+          // Input starts blank (fresh page) - the placeholder shows the
+          // current stored % as a hint, but nothing is pre-filled.
           html += '<td><input type="number" class="pct' + (isApplicable ? '' : ' dim') + '" min="0" max="100" step="1" ' +
-            'value="' + val + '" data-row="' + r.row + '" data-step="' + s + '" ' +
+            'value="" placeholder="' + currentVal + '%" data-row="' + r.row + '" data-step="' + s + '" ' +
             (isApplicable ? '' : 'disabled title="Not applicable for ' + r.component + '"') +
             ' oninput="onEdit(this)"></td>';
         }
@@ -269,7 +275,19 @@
 
     function onEdit(input) {
       const row = input.dataset.row;
-      input.classList.add('changed');
+      const step = Number(input.dataset.step);
+      const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
+      if (!rObj) return;
+
+      if (input.value === '') {
+        // Cleared back to blank - treat as "leave this step as its current value".
+        rObj.steps[step] = rObj.originalSteps[step];
+        input.classList.remove('changed');
+      } else {
+        rObj.steps[step] = Number(input.value) / 100;
+        input.classList.add('changed');
+      }
+
       dirty[row] = true;
       recomputeRow(row);
       updateOverallPill();
@@ -280,12 +298,8 @@
     function recomputeRow(row) {
       const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
       if (!rObj) return;
-      const inputs = document.querySelectorAll('input.pct[data-row="' + row + '"]');
-      const steps = [];
-      inputs.forEach(function (inp) { steps[Number(inp.dataset.step)] = Number(inp.value) / 100; });
-      rObj.steps = steps;
       const idx = applicableSteps(rObj.component);
-      const vals = idx.map(function (i) { return steps[i] || 0; });
+      const vals = idx.map(function (i) { return rObj.steps[i] || 0; });
       const overall = vals.reduce(function (a, b) { return a + (b || 0); }, 0) / vals.length;
       rObj.overall = overall;
       rObj.status = overall <= 0 ? 'Not Started' : (overall >= 1 ? 'Complete' : 'In Progress');
@@ -294,6 +308,21 @@
       const badge = document.querySelector('[data-status="' + row + '"]');
       badge.innerText = rObj.status;
       badge.className = 'badge ' + statusClass(rObj.status);
+    }
+
+    /** After a successful save, blank the row's inputs again and refresh
+     *  their placeholders to the newly saved values, so the page stays
+     *  "fresh" without needing a full reload. */
+    function resetRowToFresh(row) {
+      const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
+      if (!rObj) return;
+      rObj.originalSteps = rObj.steps.slice();
+      document.querySelectorAll('input.pct[data-row="' + row + '"]').forEach(function (inp) {
+        const step = Number(inp.dataset.step);
+        inp.value = '';
+        inp.placeholder = Math.round((rObj.steps[step] || 0) * 100) + '%';
+        inp.classList.remove('changed');
+      });
     }
 
     function updateOverallPill() {
@@ -329,7 +358,7 @@
         .then(function (res) {
           if (!res.success) throw new Error(res.error || 'Unknown error');
           setStatus('Saved ' + res.changedCount + ' change(s) at ' + new Date(res.timestamp).toLocaleTimeString(), 'ok');
-          document.querySelectorAll('input.pct.changed').forEach(function (i) { i.classList.remove('changed'); });
+          rowsToSave.forEach(function (item) { resetRowToFresh(item.row); });
           dirty = {};
         })
         .catch(function (err) {
