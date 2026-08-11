@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Civil Works - Daily Production Tracker</title>
+<style>
+  :root {
+    --navy: #1F4E78;
+    --navy-light: #EAF1F8;
+    --green: #2E7D32;
+    --amber: #E6A100;
+    --grey: #8A8F98;
+    --border: #D8DEE6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    background: #F5F7FA;
+    color: #222;
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; opacity: 0.85; }
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  #search {
+    flex: 1;
+    min-width: 180px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  .progress-pill {
+    background: var(--navy-light);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--navy);
+    white-space: nowrap;
+  }
+  #saveBtn {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #saveBtn:disabled { background: #A5A5A5; cursor: default; }
+  #status { font-size: 12px; color: var(--grey); min-width: 160px; }
+  #status.ok { color: var(--green); font-weight: 600; }
+  #status.err { color: #C0392B; font-weight: 600; }
+  main { padding: 14px 20px 60px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; }
+  th, td { border: 1px solid var(--border); padding: 6px 7px; text-align: center; white-space: nowrap; }
+  th { background: var(--navy); color: #fff; font-weight: 600; position: sticky; top: 96px; z-index: 3; }
+  td.left, th.left { text-align: left; }
+  tr:nth-child(even) td { background: #FAFBFC; }
+  input.pct {
+    width: 54px; padding: 4px; border: 1px solid var(--border);
+    border-radius: 4px; text-align: center; font-size: 12.5px;
+  }
+  input.pct.dim { background: #F0F0F0; color: #BBB; }
+  input.pct.changed { border-color: var(--amber); background: #FFF7E0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.notstarted { background: #EEE; color: #666; }
+  .badge.inprogress { background: #FFF2CC; color: #8A6D00; }
+  .badge.complete { background: #E2F0E4; color: var(--green); }
+  .overall-cell { font-weight: 700; color: var(--navy); }
+  #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
+  #authError { display: none; color: #C0392B; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Civil Works - Daily Production Tracker</h1>
+      <div class="sub">Edit the % complete for each step below, then click Save.</div>
+    </div>
+    <div class="progress-pill" id="overallPill">Overall: --%</div>
+  </header>
+
+  <div id="topbar">
+    <input id="search" type="text" placeholder="Search by Foundation Ref...">
+    <div id="status">Loading...</div>
+    <button id="saveBtn" onclick="saveAll()" disabled>Save Progress</button>
+  </div>
+
+  <main>
+    <div id="loading">Loading Civil BOQ...</div>
+    <div id="authError">Could not load data. Check that APPS_SCRIPT_URL and KEY at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
+    <table id="boqTable" style="display:none">
+      <thead><tr id="headRow"></tr></thead>
+      <tbody id="boqBody"></tbody>
+    </table>
+  </main>
+
+  <script>
+    // ---- Configure these two to match your Apps Script deployment ----
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyE-9HV7bJZ5hHIJskle09hA3i90PoXw1UtRdWWpnf4l0SVXj00ac8ImVngDmZd3PAc8Q/exec';
+    const KEY = '61face4c8a83eae9e8204e35';
+    // --------------------------------------------------------------
+
+    let ROWS = [];
+    let dirty = {};
+
+    const SHORT_LABELS = [
+      'Reinf.<br>(Footing)', 'Formwork<br>(Footing)', 'Pour Concrete<br>(Footing)',
+      'Reinf.<br>(Pedestal)', 'Formwork<br>(Pedestal)', 'Pour Concrete<br>(Pedestal)', 'Coating'
+    ];
+
+    function load() {
+      fetch(APPS_SCRIPT_URL + '?key=' + encodeURIComponent(KEY))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) throw new Error(data.error);
+          onData(data);
+        })
+        .catch(onError);
+    }
+
+    function onError(err) {
+      document.getElementById('loading').style.display = 'none';
+      const el = document.getElementById('authError');
+      el.style.display = 'block';
+      el.innerText += ' (' + (err.message || err) + ')';
+    }
+
+    function onData(data) {
+      ROWS = data.rows;
+      renderHead();
+      renderBody();
+      updateOverallPill();
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('boqTable').style.display = 'table';
+      setStatus('Loaded. No unsaved changes.', '');
+    }
+
+    function renderHead() {
+      const head = document.getElementById('headRow');
+      let html = '<th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
+      SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
+      html += '<th>Overall %</th><th>Status</th>';
+      head.innerHTML = html;
+    }
+
+    function renderBody() {
+      const body = document.getElementById('boqBody');
+      body.innerHTML = '';
+      ROWS.forEach(function (r) {
+        const tr = document.createElement('tr');
+        tr.dataset.row = r.row;
+        tr.dataset.ref = (r.foundationRef || '').toLowerCase();
+
+        let html = '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.component) + '</td>';
+        html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
+
+        const applicable = r.component === 'Footing' ? [0, 1, 2] : (r.component === 'Pedestal' ? [3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6]);
+        for (let s = 0; s < 7; s++) {
+          const isApplicable = applicable.indexOf(s) !== -1;
+          const val = Math.round((r.steps[s] || 0) * 100);
+          html += '<td><input type="number" class="pct' + (isApplicable ? '' : ' dim') + '" min="0" max="100" step="1" ' +
+            'value="' + val + '" data-row="' + r.row + '" data-step="' + s + '" ' +
+            (isApplicable ? '' : 'disabled title="Not applicable for ' + r.component + '"') +
+            ' oninput="onEdit(this)"></td>';
+        }
+        html += '<td class="overall-cell" data-overall="' + r.row + '">' + Math.round(r.overall * 100) + '%</td>';
+        html += '<td><span class="badge ' + statusClass(r.status) + '" data-status="' + r.row + '">' + r.status + '</span></td>';
+
+        tr.innerHTML = html;
+        body.appendChild(tr);
+      });
+    }
+
+    function statusClass(s) {
+      if (s === 'Complete') return 'complete';
+      if (s === 'In Progress') return 'inprogress';
+      return 'notstarted';
+    }
+
+    function onEdit(input) {
+      const row = input.dataset.row;
+      input.classList.add('changed');
+      dirty[row] = true;
+      recomputeRow(row);
+      updateOverallPill();
+      document.getElementById('saveBtn').disabled = false;
+      setStatus('Unsaved changes', '');
+    }
+
+    function recomputeRow(row) {
+      const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
+      if (!rObj) return;
+      const inputs = document.querySelectorAll('input.pct[data-row="' + row + '"]');
+      const steps = [];
+      inputs.forEach(function (inp) { steps[Number(inp.dataset.step)] = Number(inp.value) / 100; });
+      rObj.steps = steps;
+      let vals;
+      if (rObj.component === 'Footing') vals = steps.slice(0, 3);
+      else if (rObj.component === 'Pedestal') vals = steps.slice(3, 7);
+      else vals = steps;
+      const overall = vals.reduce(function (a, b) { return a + (b || 0); }, 0) / vals.length;
+      rObj.overall = overall;
+      rObj.status = overall <= 0 ? 'Not Started' : (overall >= 1 ? 'Complete' : 'In Progress');
+
+      document.querySelector('[data-overall="' + row + '"]').innerText = Math.round(overall * 100) + '%';
+      const badge = document.querySelector('[data-status="' + row + '"]');
+      badge.innerText = rObj.status;
+      badge.className = 'badge ' + statusClass(rObj.status);
+    }
+
+    function updateOverallPill() {
+      let sumQtyPct = 0, sumQty = 0;
+      ROWS.forEach(function (r) {
+        const qty = Number(r.qty) || 0;
+        sumQtyPct += qty * (r.overall || 0);
+        sumQty += qty;
+      });
+      const pct = sumQty > 0 ? Math.round((sumQtyPct / sumQty) * 100) : 0;
+      document.getElementById('overallPill').innerText = 'Overall: ' + pct + '%';
+    }
+
+    function saveAll() {
+      const rowsToSave = Object.keys(dirty).map(function (row) {
+        const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
+        return { row: Number(row), steps: rObj.steps.map(function (v) { return Math.round((v || 0) * 100); }) };
+      });
+      if (rowsToSave.length === 0) return;
+
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      setStatus('Saving...', '');
+
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
+        body: JSON.stringify({ key: KEY, rows: rowsToSave, updatedBy: 'GitHub Pages tracker' })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.success) throw new Error(res.error || 'Unknown error');
+          setStatus('Saved ' + res.changedCount + ' change(s) at ' + new Date(res.timestamp).toLocaleTimeString(), 'ok');
+          document.querySelectorAll('input.pct.changed').forEach(function (i) { i.classList.remove('changed'); });
+          dirty = {};
+        })
+        .catch(function (err) {
+          setStatus('Save failed: ' + (err.message || err), 'err');
+          btn.disabled = false;
+        });
+    }
+
+    function setStatus(text, cls) {
+      const el = document.getElementById('status');
+      el.innerText = text;
+      el.className = cls;
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    document.getElementById('search').addEventListener('input', function (e) {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('#boqBody tr').forEach(function (tr) {
+        tr.style.display = tr.dataset.ref.indexOf(q) !== -1 ? '' : 'none';
+      });
+    });
+
+    load();
+  </script>
+</body>
+</html>
