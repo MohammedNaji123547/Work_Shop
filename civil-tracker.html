@@ -72,6 +72,14 @@
     cursor: pointer;
   }
   #saveBtn:disabled { background: #A5A5A5; cursor: default; }
+  #updateDate {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 13px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  #dateLabel { font-size: 12px; color: var(--grey); white-space: nowrap; }
   #status { font-size: 12px; color: var(--grey); min-width: 160px; }
   #status.ok { color: var(--green); font-weight: 600; }
   #status.err { color: #C0392B; font-weight: 600; }
@@ -107,6 +115,8 @@
 
   <div id="topbar">
     <input id="search" type="text" placeholder="Search by Foundation Ref...">
+    <span id="dateLabel">Update date:</span>
+    <input id="updateDate" type="date">
     <div id="status">Loading...</div>
     <button id="saveBtn" onclick="saveAll()" disabled>Save Progress</button>
   </div>
@@ -122,7 +132,7 @@
 
   <script>
     // ---- Configure these two to match your Apps Script deployment ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx25k6yfYrmzUba401jJCqgEzO2I2Hd-OO7xRBUI2Df5hRm3x6SxozdeEtfU9ctCRT1YA/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyE-9HV7bJZ5hHIJskle09hA3i90PoXw1UtRdWWpnf4l0SVXj00ac8ImVngDmZd3PAc8Q/exec';
     const KEY = '61face4c8a83eae9e8204e35';
     // --------------------------------------------------------------
 
@@ -131,10 +141,27 @@
 
     const SHORT_LABELS = [
       'Reinf.<br>(Footing)', 'Formwork<br>(Footing)', 'Pour Concrete<br>(Footing)',
-      'Reinf.<br>(Pedestal)', 'Formwork<br>(Pedestal)', 'Pour Concrete<br>(Pedestal)', 'Coating'
+      'Reinf.<br>(Pedestal)', 'Formwork<br>(Pedestal)', 'Pour Concrete<br>(Pedestal)',
+      'Coating<br>(Both)', 'Insert Plate/<br>Anker Bolt (Both)'
     ];
+    const STEP_COUNT = 8;
+    // Coating (6) and Insert Plate/Anker Bolt (7) apply to both Footing and Pedestal rows.
+    function applicableSteps(component) {
+      if (component === 'Footing') return [0, 1, 2, 6, 7];
+      if (component === 'Pedestal') return [3, 4, 5, 6, 7];
+      return [0, 1, 2, 3, 4, 5, 6, 7];
+    }
+
+    function todayStr() {
+      const d = new Date();
+      const pad = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
 
     function load() {
+      const dateInput = document.getElementById('updateDate');
+      dateInput.value = todayStr();
+
       fetch(APPS_SCRIPT_URL + '?key=' + encodeURIComponent(KEY))
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -181,8 +208,8 @@
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
 
-        const applicable = r.component === 'Footing' ? [0, 1, 2] : (r.component === 'Pedestal' ? [3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6]);
-        for (let s = 0; s < 7; s++) {
+        const applicable = applicableSteps(r.component);
+        for (let s = 0; s < STEP_COUNT; s++) {
           const isApplicable = applicable.indexOf(s) !== -1;
           const val = Math.round((r.steps[s] || 0) * 100);
           html += '<td><input type="number" class="pct' + (isApplicable ? '' : ' dim') + '" min="0" max="100" step="1" ' +
@@ -221,10 +248,8 @@
       const steps = [];
       inputs.forEach(function (inp) { steps[Number(inp.dataset.step)] = Number(inp.value) / 100; });
       rObj.steps = steps;
-      let vals;
-      if (rObj.component === 'Footing') vals = steps.slice(0, 3);
-      else if (rObj.component === 'Pedestal') vals = steps.slice(3, 7);
-      else vals = steps;
+      const idx = applicableSteps(rObj.component);
+      const vals = idx.map(function (i) { return steps[i] || 0; });
       const overall = vals.reduce(function (a, b) { return a + (b || 0); }, 0) / vals.length;
       rObj.overall = overall;
       rObj.status = overall <= 0 ? 'Not Started' : (overall >= 1 ? 'Complete' : 'In Progress');
@@ -253,6 +278,8 @@
       });
       if (rowsToSave.length === 0) return;
 
+      const updateDate = document.getElementById('updateDate').value || todayStr();
+
       const btn = document.getElementById('saveBtn');
       btn.disabled = true;
       setStatus('Saving...', '');
@@ -260,7 +287,7 @@
       fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
-        body: JSON.stringify({ key: KEY, rows: rowsToSave, updatedBy: 'GitHub Pages tracker' })
+        body: JSON.stringify({ key: KEY, rows: rowsToSave, updatedBy: 'GitHub Pages tracker', updateDate: updateDate })
       })
         .then(function (r) { return r.json(); })
         .then(function (res) {
