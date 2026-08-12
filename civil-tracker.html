@@ -173,7 +173,7 @@
 
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx25k6yfYrmzUba401jJCqgEzO2I2Hd-OO7xRBUI2Df5hRm3x6SxozdeEtfU9ctCRT1YA/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUQxJDcdvpIEZ_prxMj6NoG6iLo0aiC0kXdmXdakfK5yG-h0ATi-b0ZaFjMO20J5gLIA/exec';
     const KEY = '61face4c8a83eae9e8204e35';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
@@ -184,17 +184,11 @@
     let dirty = {};
 
     const SHORT_LABELS = [
-      'Reinf.<br>(Footing)', 'Formwork<br>(Footing)', 'Pour Concrete<br>(Footing)',
-      'Reinf.<br>(Pedestal)', 'Formwork<br>(Pedestal)', 'Pour Concrete<br>(Pedestal)',
-      'Coating<br>(Both)', 'Insert Plate/<br>Anker Bolt (Both)'
+      'Steel<br>Reinforcement', 'Formwork', 'Pouring<br>Concrete',
+      'Coating', 'Insert Plate/<br>Anker Bolt'
     ];
-    const STEP_COUNT = 8;
-    // Coating (6) and Insert Plate/Anker Bolt (7) apply to both Footing and Pedestal rows.
-    function applicableSteps(component) {
-      if (component === 'Footing') return [0, 1, 2, 6, 7];
-      if (component === 'Pedestal') return [3, 4, 5, 6, 7];
-      return [0, 1, 2, 3, 4, 5, 6, 7];
-    }
+    const STEP_COUNT = 5;
+    // All 5 steps apply to every row now, regardless of Component.
 
     function todayStr() {
       const d = new Date();
@@ -276,7 +270,7 @@
 
     function renderHead() {
       const head = document.getElementById('headRow');
-      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th>';
+      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th>Qty (m3)</th><th>Weighted</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th>Overall %</th><th>Status</th>';
       head.innerHTML = html;
@@ -304,16 +298,14 @@
         html += '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
+        html += '<td>' + (r.weighted != null && r.weighted !== '' ? r.weighted : '') + '</td>';
 
-        const applicable = applicableSteps(r.component);
         for (let s = 0; s < STEP_COUNT; s++) {
-          const isApplicable = applicable.indexOf(s) !== -1;
           const currentVal = Math.round((r.steps[s] || 0) * 100);
           // Input starts blank (fresh page) - the placeholder shows the
           // current stored % as a hint, but nothing is pre-filled.
-          html += '<td><input type="number" class="pct' + (isApplicable ? '' : ' dim') + '" min="0" max="100" step="1" ' +
+          html += '<td><input type="number" class="pct" min="0" max="100" step="1" ' +
             'value="" placeholder="' + currentVal + '%" data-row="' + r.row + '" data-step="' + s + '" ' +
-            (isApplicable ? '' : 'disabled title="Not applicable for ' + r.component + '"') +
             ' oninput="onEdit(this)"></td>';
         }
         html += '<td class="overall-cell" data-overall="' + r.row + '">' + Math.round(r.overall * 100) + '%</td>';
@@ -355,8 +347,7 @@
     function recomputeRow(row) {
       const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
       if (!rObj) return;
-      const idx = applicableSteps(rObj.component);
-      const vals = idx.map(function (i) { return rObj.steps[i] || 0; });
+      const vals = rObj.steps;
       const overall = vals.reduce(function (a, b) { return a + (b || 0); }, 0) / vals.length;
       rObj.overall = overall;
       rObj.status = overall <= 0 ? 'Not Started' : (overall >= 1 ? 'Complete' : 'In Progress');
