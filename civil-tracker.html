@@ -76,6 +76,16 @@
     cursor: pointer;
   }
   #saveBtn:disabled { background: #A5A5A5; cursor: default; }
+  #refreshBtn {
+    background: #fff;
+    color: var(--navy);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
   #updateDate {
     padding: 6px 8px;
     border: 1px solid var(--border);
@@ -160,6 +170,7 @@
       <span id="dateLabel">Update date:</span>
       <input id="updateDate" type="date">
       <div id="status">Loading...</div>
+      <button id="refreshBtn" onclick="refreshData()">Refresh</button>
       <button id="saveBtn" onclick="saveAll()" disabled>Save Progress</button>
     </div>
 
@@ -226,6 +237,32 @@
           el.style.display = 'block';
           idToken = null;
           if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+        });
+    }
+
+    /** Re-fetches the latest Civil BOQ data and re-renders the table, without
+     *  a full page reload or re-authentication. Warns first if there are
+     *  unsaved typed values that would be lost. */
+    function refreshData() {
+      const hasDirty = Object.keys(dirty).length > 0;
+      if (hasDirty && !confirm('You have unsaved changes that will be lost. Refresh anyway?')) {
+        return;
+      }
+      setStatus('Refreshing...', '');
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ key: KEY, token: idToken, action: 'load' })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) throw new Error(data.error);
+          dirty = {};
+          onData(data);
+          updateSaveButtonState();
+        })
+        .catch(function (err) {
+          setStatus('Refresh failed: ' + (err.message || err), 'err');
         });
     }
 
