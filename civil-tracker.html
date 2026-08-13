@@ -99,6 +99,8 @@
   }
   input.pct.dim { background: #F0F0F0; color: #BBB; }
   input.pct.changed { border-color: var(--amber); background: #FFF7E0; }
+  input.pct.invalid { border-color: #C0392B; background: #FDECEA; }
+  .current-val { font-size: 10px; color: var(--grey); margin-top: 3px; white-space: nowrap; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .badge.notstarted { background: #EEE; color: #666; }
   .badge.inprogress { background: #FFF2CC; color: #8A6D00; }
@@ -173,7 +175,7 @@
 
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUQxJDcdvpIEZ_prxMj6NoG6iLo0aiC0kXdmXdakfK5yG-h0ATi-b0ZaFjMO20J5gLIA/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyE-9HV7bJZ5hHIJskle09hA3i90PoXw1UtRdWWpnf4l0SVXj00ac8ImVngDmZd3PAc8Q/exec';
     const KEY = '61face4c8a83eae9e8204e35';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
@@ -303,11 +305,13 @@
 
         for (let s = 0; s < STEP_COUNT; s++) {
           const currentVal = Math.round((r.steps[s] || 0) * 100);
-          // Input starts blank (fresh page) - the placeholder shows the
-          // current stored % as a hint, but nothing is pre-filled.
+          // Input starts blank (fresh page) - the placeholder is just a
+          // hint, so the current cumulative % is also shown as an always-
+          // visible label underneath (doesn't disappear once you start typing).
           html += '<td><input type="number" class="pct" min="0" max="100" step="1" ' +
             'value="" placeholder="' + currentVal + '%" data-row="' + r.row + '" data-step="' + s + '" ' +
-            ' oninput="onEdit(this)"></td>';
+            ' oninput="onEdit(this)">' +
+            '<div class="current-val" data-current="' + r.row + '-' + s + '">Current: ' + currentVal + '%</div></td>';
         }
         html += '<td class="overall-cell" data-overall="' + r.row + '">' + Math.round(r.overall * 100) + '%</td>';
         html += '<td><span class="badge ' + statusClass(r.status) + '" data-status="' + r.row + '">' + r.status + '</span></td>';
@@ -333,16 +337,36 @@
         // Cleared back to blank - treat as "leave this step as its current value".
         rObj.steps[step] = rObj.originalSteps[step];
         input.classList.remove('changed');
+        input.classList.remove('invalid');
       } else {
-        rObj.steps[step] = Number(input.value) / 100;
-        input.classList.add('changed');
+        const v = Number(input.value);
+        if (isNaN(v) || v > 100 || v < 0) {
+          // Cumulative % can't exceed 100 (or go negative) - flag it and
+          // leave the stored value untouched until it's corrected.
+          input.classList.add('invalid');
+          input.classList.remove('changed');
+        } else {
+          rObj.steps[step] = v / 100;
+          input.classList.add('changed');
+          input.classList.remove('invalid');
+        }
       }
 
       dirty[row] = true;
       recomputeRow(row);
       updateOverallPill();
-      document.getElementById('saveBtn').disabled = false;
-      setStatus('Unsaved changes', '');
+      updateSaveButtonState();
+    }
+
+    function updateSaveButtonState() {
+      const hasInvalid = document.querySelectorAll('input.pct.invalid').length > 0;
+      const hasDirty = Object.keys(dirty).length > 0;
+      document.getElementById('saveBtn').disabled = hasInvalid || !hasDirty;
+      if (hasInvalid) {
+        setStatus('Fix % values over 100 (shown in red) before saving', 'err');
+      } else if (hasDirty) {
+        setStatus('Unsaved changes', '');
+      }
     }
 
     function recomputeRow(row) {
@@ -368,9 +392,13 @@
       rObj.originalSteps = rObj.steps.slice();
       document.querySelectorAll('input.pct[data-row="' + row + '"]').forEach(function (inp) {
         const step = Number(inp.dataset.step);
+        const currentVal = Math.round((rObj.steps[step] || 0) * 100);
         inp.value = '';
-        inp.placeholder = Math.round((rObj.steps[step] || 0) * 100) + '%';
+        inp.placeholder = currentVal + '%';
         inp.classList.remove('changed');
+        inp.classList.remove('invalid');
+        const label = document.querySelector('[data-current="' + row + '-' + step + '"]');
+        if (label) label.innerText = 'Current: ' + currentVal + '%';
       });
     }
 
