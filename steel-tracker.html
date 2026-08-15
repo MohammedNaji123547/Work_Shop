@@ -326,11 +326,11 @@
 
         const tr = document.createElement('tr');
         tr.dataset.row = r.row;
-        tr.dataset.costCenter = (r.costCenter || '').toLowerCase();
-        tr.dataset.ctrNum = (r.ctrNum || '').toLowerCase();
-        tr.dataset.project = (r.project || '').toLowerCase();
-        tr.dataset.itemTag = (r.itemTag || '').toLowerCase();
-        tr.dataset.fabType = (r.fabType || '').toLowerCase();
+        tr.dataset.costCenter = String(r.costCenter || '').toLowerCase();
+        tr.dataset.ctrNum = String(r.ctrNum || '').toLowerCase();
+        tr.dataset.project = String(r.project || '').toLowerCase();
+        tr.dataset.itemTag = String(r.itemTag || '').toLowerCase();
+        tr.dataset.fabType = String(r.fabType || '').toLowerCase();
 
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
