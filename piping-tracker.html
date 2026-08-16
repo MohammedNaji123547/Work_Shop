@@ -201,8 +201,8 @@
     let ROWS = [];
     let dirty = {};
 
-    const SHORT_LABELS = ['PWHT', 'NDT', 'Hydrotest', 'Painting'];
-    const STEP_COUNT = 4;
+    const SHORT_LABELS = ['PWHT', 'NDT', 'Hydrotest', 'Painting', 'Internal<br>Painting', 'Cold Wrap'];
+    const STEP_COUNT = 6;
     // Fabrication and Welding are handled separately below (counts capped at
     // Size, not percentages) - they are NOT part of SHORT_LABELS/STEP_COUNT.
 
@@ -313,7 +313,7 @@
     function renderHead() {
       const head = document.getElementById('headRow');
       let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th>' +
-        '<th class="left">Spool No.</th><th class="left">Join No.</th><th>Size</th>' +
+        '<th class="left">Spool No.</th><th class="left">Join No.</th><th class="left">Join Type</th><th>Size</th>' +
         '<th class="left">Material Type</th><th class="left">Welding Type</th>' +
         '<th class="th-count">Fabrication</th><th class="th-count">Welding</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
@@ -345,6 +345,7 @@
         html += '<td class="left">' + escapeHtml(r.project) + '</td>';
         html += '<td class="left">' + escapeHtml(r.spoolNo) + '</td>';
         html += '<td class="left">' + escapeHtml(r.joinNo) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.joinType) + '</td>';
         html += '<td>' + (r.size != null ? r.size : '') + '</td>';
         html += '<td class="left">' + escapeHtml(r.materialType) + '</td>';
         html += '<td class="left">' + escapeHtml(r.weldingType) + '</td>';
