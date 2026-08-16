@@ -164,14 +164,19 @@
         <datalist id="projectList"></datalist>
       </div>
       <div class="filter-group">
-        <span class="filter-label">Spool No.</span>
-        <input id="filterSpoolNo" class="filter-input" type="text" list="spoolNoList" placeholder="All spools" autocomplete="off">
-        <datalist id="spoolNoList"></datalist>
+        <span class="filter-label">DWG Ref.</span>
+        <input id="filterDwgRef" class="filter-input" type="text" list="dwgRefList" placeholder="All DWG refs" autocomplete="off">
+        <datalist id="dwgRefList"></datalist>
       </div>
       <div class="filter-group">
         <span class="filter-label">Join No.</span>
         <input id="filterJoinNo" class="filter-input" type="text" list="joinNoList" placeholder="All joints" autocomplete="off">
         <datalist id="joinNoList"></datalist>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Material Type</span>
+        <input id="filterMaterialType" class="filter-input" type="text" list="materialTypeList" placeholder="All materials" autocomplete="off">
+        <datalist id="materialTypeList"></datalist>
       </div>
       <span id="dateLabel">Update date:</span>
       <input id="updateDate" type="date">
@@ -192,7 +197,7 @@
 
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwpKzNNuPr1mG90742Q6mjoc2YKGZke7w2Ht7bRzHPFWYDYwIW-zVPZccnefrta7ZFo/exec';
+    const APPS_SCRIPT_URL = 'PASTE_YOUR_PIPING_APPS_SCRIPT_EXEC_URL_HERE';
     const KEY = '246558e10ddec9f6ba40df8f';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
@@ -307,8 +312,9 @@
       fill('costCenterList', uniq(function (r) { return r.costCenter; }));
       fill('ctrNumList', uniq(function (r) { return r.ctrNum; }));
       fill('projectList', uniq(function (r) { return r.project; }));
-      fill('spoolNoList', uniq(function (r) { return r.spoolNo; }));
+      fill('dwgRefList', uniq(function (r) { return r.dwgRef; }));
       fill('joinNoList', uniq(function (r) { return r.joinNo; }));
+      fill('materialTypeList', uniq(function (r) { return r.materialType; }));
     }
 
     function renderHead() {
@@ -338,8 +344,9 @@
         tr.dataset.costCenter = String(r.costCenter || '').toLowerCase();
         tr.dataset.ctrNum = String(r.ctrNum || '').toLowerCase();
         tr.dataset.project = String(r.project || '').toLowerCase();
-        tr.dataset.spoolNo = String(r.spoolNo || '').toLowerCase();
+        tr.dataset.dwgRef = String(r.dwgRef || '').toLowerCase();
         tr.dataset.joinNo = String(r.joinNo || '').toLowerCase();
+        tr.dataset.materialType = String(r.materialType || '').toLowerCase();
 
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
@@ -604,20 +611,22 @@
       const qCostCenter = document.getElementById('filterCostCenter').value.toLowerCase();
       const qCtrNum = document.getElementById('filterCtrNum').value.toLowerCase();
       const qProject = document.getElementById('filterProject').value.toLowerCase();
-      const qSpoolNo = document.getElementById('filterSpoolNo').value.toLowerCase();
+      const qDwgRef = document.getElementById('filterDwgRef').value.toLowerCase();
       const qJoinNo = document.getElementById('filterJoinNo').value.toLowerCase();
+      const qMaterialType = document.getElementById('filterMaterialType').value.toLowerCase();
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         const matches =
           tr.dataset.costCenter.indexOf(qCostCenter) !== -1 &&
           tr.dataset.ctrNum.indexOf(qCtrNum) !== -1 &&
           tr.dataset.project.indexOf(qProject) !== -1 &&
-          tr.dataset.spoolNo.indexOf(qSpoolNo) !== -1 &&
-          tr.dataset.joinNo.indexOf(qJoinNo) !== -1;
+          tr.dataset.dwgRef.indexOf(qDwgRef) !== -1 &&
+          tr.dataset.joinNo.indexOf(qJoinNo) !== -1 &&
+          tr.dataset.materialType.indexOf(qMaterialType) !== -1;
         tr.style.display = matches ? '' : 'none';
       });
     }
 
-    ['filterCostCenter', 'filterCtrNum', 'filterProject', 'filterSpoolNo', 'filterJoinNo'].forEach(function (id) {
+    ['filterCostCenter', 'filterCtrNum', 'filterProject', 'filterDwgRef', 'filterJoinNo', 'filterMaterialType'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', applyFilters);
     });
   </script>
