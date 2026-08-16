@@ -116,6 +116,7 @@
   input.changed { border-color: var(--amber); background: #FFF7E0; }
   input.invalid { border-color: #C0392B; background: #FDECEA; }
   .current-val { font-size: 10px; color: var(--grey); margin-top: 3px; white-space: nowrap; }
+  td.na-cell { color: var(--grey); font-style: italic; background: #F1F2F4 !important; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .badge.notstarted { background: #EEE; color: #666; }
   .badge.inprogress { background: #FFF2CC; color: #8A6D00; }
@@ -352,8 +353,17 @@
 
         // Fabrication / Welding - counts capped at this row's Size, blank +
         // placeholder like the percentage steps (type the new cumulative count).
+        // Only rendered as an editable box if this row is marked "applies" for
+        // that step (set as a read-only checkbox in the sheet); otherwise shown
+        // as a grayed "N/A" cell so no one can enter progress on a step this
+        // row doesn't go through.
         const size = Number(r.size) || 0;
+        const appliesFabWeld = { fabrication: !!r.appliesFab, welding: !!r.appliesWeld };
         ['fabrication', 'welding'].forEach(function (field) {
+          if (!appliesFabWeld[field]) {
+            html += '<td class="na-cell">N/A</td>';
+            return;
+          }
           const currentVal = r[field] || 0;
           html += '<td><input type="number" class="num" min="0" ' + (size > 0 ? 'max="' + size + '"' : '') + ' step="any" ' +
             'value="" placeholder="' + currentVal + '" data-row="' + r.row + '" data-kind="num" data-field="' + field + '" data-cap="' + size + '" ' +
@@ -361,8 +371,13 @@
             '<div class="current-val">Current: ' + currentVal + (size > 0 ? ' / ' + size : '') + '</div></td>';
         });
 
-        // 4 percentage steps.
+        // 6 percentage steps - same N/A treatment for steps this row doesn't
+        // go through, based on the row's "Applies: ..." checkboxes.
         for (let s = 0; s < STEP_COUNT; s++) {
+          if (!(r.appliesSteps && r.appliesSteps[s])) {
+            html += '<td class="na-cell">N/A</td>';
+            continue;
+          }
           const currentVal = Math.round((r.steps[s] || 0) * 100);
           html += '<td><input type="number" class="pct" min="0" max="100" step="1" ' +
             'value="" placeholder="' + currentVal + '%" data-row="' + r.row + '" data-kind="pct" data-step="' + s + '" ' +
@@ -457,11 +472,25 @@
       }
     }
 
+    /** Fabrication/Welding are counts capped at Size; for Overall % Complete
+     *  they're converted to a fraction (count / Size). Size 0/blank counts
+     *  as 0% for that step, matching the backend. */
+    function countToPct(count, size) {
+      if (!(size > 0)) return 0;
+      return Math.max(0, Math.min((count || 0) / size, 1));
+    }
+
     function recomputeRow(row) {
       const rObj = ROWS.find(function (x) { return String(x.row) === String(row); });
       if (!rObj) return;
-      const vals = rObj.steps;
-      const overall = vals.reduce(function (a, b) { return a + (b || 0); }, 0) / vals.length;
+      const size = Number(rObj.size) || 0;
+      const values = [countToPct(rObj.fabrication, size), countToPct(rObj.welding, size)].concat(rObj.steps);
+      const applies = [!!rObj.appliesFab, !!rObj.appliesWeld].concat(rObj.appliesSteps || []);
+      let sum = 0, count = 0;
+      for (let i = 0; i < values.length; i++) {
+        if (applies[i]) { sum += (values[i] || 0); count++; }
+      }
+      const overall = count > 0 ? sum / count : 0;
       rObj.overall = overall;
       rObj.status = overall <= 0 ? 'Not Started' : (overall >= 1 ? 'Complete' : 'In Progress');
 
