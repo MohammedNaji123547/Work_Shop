@@ -334,22 +334,60 @@
       setStatus('Loaded. No unsaved changes.', '');
     }
 
+    // Each filter's <input> id, matching <datalist> id, and the ROWS field it
+    // reads. Order here also drives the cross-filtering below - picking a
+    // value in any one of these narrows the dropdown options offered by all
+    // the others (e.g. Cost Center narrows CTR#, and CTR# narrows Cost
+    // Center right back).
+    const FILTER_FIELDS = {
+      costCenter: { inputId: 'filterCostCenter', listId: 'costCenterList' },
+      ctrNum: { inputId: 'filterCtrNum', listId: 'ctrNumList' },
+      project: { inputId: 'filterProject', listId: 'projectList' },
+      dwgRef: { inputId: 'filterDwgRef', listId: 'dwgRefList' },
+      joinNo: { inputId: 'filterJoinNo', listId: 'joinNoList' },
+      materialType: { inputId: 'filterMaterialType', listId: 'materialTypeList' }
+    };
+
+    function getActiveFilterValues() {
+      const values = {};
+      Object.keys(FILTER_FIELDS).forEach(function (field) {
+        values[field] = document.getElementById(FILTER_FIELDS[field].inputId).value.trim().toLowerCase();
+      });
+      return values;
+    }
+
+    /** True if `row` matches every currently-active filter, ignoring the one
+     *  named in `excludeField` (used when computing that filter's own
+     *  dropdown, so typing into a box doesn't shrink its own option list). */
+    function rowMatchesFilters(row, values, excludeField) {
+      return Object.keys(FILTER_FIELDS).every(function (field) {
+        if (field === excludeField) return true;
+        const v = values[field];
+        if (!v) return true;
+        const rv = String(row[field] || '').toLowerCase();
+        return rv.indexOf(v) !== -1;
+      });
+    }
+
+    /** Rebuilds every filter's dropdown so it only offers values that
+     *  actually occur among rows matching the OTHER currently active
+     *  filters - this is the cascading behavior: pick a Cost Center and the
+     *  CTR# dropdown (and Project, DWG Ref., etc.) narrows to just what's
+     *  related to it, and so on for whichever filters are set. */
     function populateFilterOptions() {
-      const uniq = function (getter) {
+      const values = getActiveFilterValues();
+      Object.keys(FILTER_FIELDS).forEach(function (field) {
         const set = new Set();
-        ROWS.forEach(function (r) { const v = getter(r); if (v) set.add(v); });
-        return Array.from(set).sort();
-      };
-      const fill = function (listId, values) {
-        document.getElementById(listId).innerHTML =
-          values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
-      };
-      fill('costCenterList', uniq(function (r) { return r.costCenter; }));
-      fill('ctrNumList', uniq(function (r) { return r.ctrNum; }));
-      fill('projectList', uniq(function (r) { return r.project; }));
-      fill('dwgRefList', uniq(function (r) { return r.dwgRef; }));
-      fill('joinNoList', uniq(function (r) { return r.joinNo; }));
-      fill('materialTypeList', uniq(function (r) { return r.materialType; }));
+        ROWS.forEach(function (r) {
+          if (rowMatchesFilters(r, values, field)) {
+            const v = r[field];
+            if (v) set.add(v);
+          }
+        });
+        const options = Array.from(set).sort();
+        document.getElementById(FILTER_FIELDS[field].listId).innerHTML =
+          options.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+      });
     }
 
     function renderHead() {
@@ -643,26 +681,24 @@
     }
 
     function applyFilters() {
-      const qCostCenter = document.getElementById('filterCostCenter').value.toLowerCase();
-      const qCtrNum = document.getElementById('filterCtrNum').value.toLowerCase();
-      const qProject = document.getElementById('filterProject').value.toLowerCase();
-      const qDwgRef = document.getElementById('filterDwgRef').value.toLowerCase();
-      const qJoinNo = document.getElementById('filterJoinNo').value.toLowerCase();
-      const qMaterialType = document.getElementById('filterMaterialType').value.toLowerCase();
+      const values = getActiveFilterValues();
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         const matches =
-          tr.dataset.costCenter.indexOf(qCostCenter) !== -1 &&
-          tr.dataset.ctrNum.indexOf(qCtrNum) !== -1 &&
-          tr.dataset.project.indexOf(qProject) !== -1 &&
-          tr.dataset.dwgRef.indexOf(qDwgRef) !== -1 &&
-          tr.dataset.joinNo.indexOf(qJoinNo) !== -1 &&
-          tr.dataset.materialType.indexOf(qMaterialType) !== -1;
+          (!values.costCenter || tr.dataset.costCenter.indexOf(values.costCenter) !== -1) &&
+          (!values.ctrNum || tr.dataset.ctrNum.indexOf(values.ctrNum) !== -1) &&
+          (!values.project || tr.dataset.project.indexOf(values.project) !== -1) &&
+          (!values.dwgRef || tr.dataset.dwgRef.indexOf(values.dwgRef) !== -1) &&
+          (!values.joinNo || tr.dataset.joinNo.indexOf(values.joinNo) !== -1) &&
+          (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1);
         tr.style.display = matches ? '' : 'none';
       });
+      // Re-narrow every dropdown to match whatever's now active, so picking
+      // one filter cascades into the options offered by the rest.
+      populateFilterOptions();
     }
 
-    ['filterCostCenter', 'filterCtrNum', 'filterProject', 'filterDwgRef', 'filterJoinNo', 'filterMaterialType'].forEach(function (id) {
-      document.getElementById(id).addEventListener('input', applyFilters);
+    Object.keys(FILTER_FIELDS).forEach(function (field) {
+      document.getElementById(FILTER_FIELDS[field].inputId).addEventListener('input', applyFilters);
     });
   </script>
 </body>
