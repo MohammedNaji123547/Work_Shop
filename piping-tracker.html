@@ -206,6 +206,7 @@
     let signedInEmail = '';
     let ROWS = [];
     let dirty = {};
+    let silentRefreshTimer = null;
 
     const SHORT_LABELS = ['PWHT', 'NDT', 'Hydrotest', 'Painting', 'Internal<br>Painting', 'Cold Wrap'];
     const STEP_COUNT = 6;
@@ -221,7 +222,39 @@
     function onGoogleSignIn(response) {
       idToken = response.credential;
       document.getElementById('signInError').style.display = 'none';
+
+      // If the app is already up and running, this callback fired from the
+      // silent background token refresh (see startSilentTokenRefresh below),
+      // not a fresh interactive sign-in. Just swap in the new token quietly -
+      // don't reset the update date or reload the table over unsaved edits.
+      const alreadySignedIn = document.getElementById('appScreen').style.display === 'block';
+      if (alreadySignedIn) return;
+
       loadWithAuth();
+    }
+
+    /** ID tokens from Google Identity Services expire ~60 minutes after
+     *  issue, and that lifetime can't be extended - it's a fixed Google-side
+     *  limit. To avoid kicking people back to the sign-in screen mid-session,
+     *  proactively ask for a fresh token every 45 minutes via One Tap's
+     *  silent flow. If the browser still has an active Google session, this
+     *  re-invokes onGoogleSignIn with a new token with no visible prompt;
+     *  it only falls back to a real sign-in screen if the user has actually
+     *  signed out of their Google account or the token can't be verified. */
+    function startSilentTokenRefresh() {
+      if (silentRefreshTimer) return;
+      silentRefreshTimer = setInterval(function () {
+        if (window.google && google.accounts && google.accounts.id) {
+          google.accounts.id.prompt();
+        }
+      }, 45 * 60 * 1000);
+    }
+
+    function stopSilentTokenRefresh() {
+      if (silentRefreshTimer) {
+        clearInterval(silentRefreshTimer);
+        silentRefreshTimer = null;
+      }
     }
 
     function loadWithAuth() {
@@ -239,6 +272,7 @@
           document.getElementById('signedInAs').innerText = 'Signed in as ' + signedInEmail;
           document.getElementById('updateDate').value = todayStr();
           onData(data);
+          startSilentTokenRefresh();
         })
         .catch(function (err) {
           const el = document.getElementById('signInError');
@@ -278,6 +312,7 @@
     function signOut() {
       idToken = null;
       signedInEmail = '';
+      stopSilentTokenRefresh();
       if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
       document.getElementById('appScreen').style.display = 'none';
       document.getElementById('signInScreen').style.display = 'block';
