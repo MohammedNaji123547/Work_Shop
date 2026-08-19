@@ -117,6 +117,7 @@
   input.invalid { border-color: #C0392B; background: #FDECEA; }
   .current-val { font-size: 10px; color: var(--grey); margin-top: 3px; white-space: nowrap; }
   td.na-cell { color: var(--grey); font-style: italic; background: #F1F2F4 !important; }
+  td.locked-cell { color: var(--green); font-weight: 700; background: #EAF7EC !important; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .badge.notstarted { background: #EEE; color: #666; }
   .badge.inprogress { background: #FFF2CC; color: #8A6D00; }
@@ -445,6 +446,12 @@
             return;
           }
           const currentVal = r[field] || 0;
+          if (size > 0 && currentVal === size) {
+            // Already fully done - locked, no further edits from the HTML.
+            // Correcting a mistake here means editing the sheet directly.
+            html += '<td class="locked-cell">' + currentVal + ' / ' + size + ' &#10003;</td>';
+            return;
+          }
           html += '<td><input type="number" class="num" min="0" ' + (size > 0 ? 'max="' + size + '"' : '') + ' step="any" ' +
             'value="" placeholder="' + currentVal + '" data-row="' + r.row + '" data-kind="num" data-field="' + field + '" data-cap="' + size + '" ' +
             ' oninput="onEdit(this)">' +
@@ -452,13 +459,18 @@
         });
 
         // 6 percentage steps - same N/A treatment for steps this row doesn't
-        // go through, based on the row's "Applies: ..." checkboxes.
+        // go through, based on the row's "Applies: ..." checkboxes. Steps
+        // already at 100% are locked the same way Fabrication/Welding are.
         for (let s = 0; s < STEP_COUNT; s++) {
           if (!(r.appliesSteps && r.appliesSteps[s])) {
             html += '<td class="na-cell">N/A</td>';
             continue;
           }
           const currentVal = Math.round((r.steps[s] || 0) * 100);
+          if (currentVal >= 100) {
+            html += '<td class="locked-cell">100% &#10003;</td>';
+            continue;
+          }
           html += '<td><input type="number" class="pct" min="0" max="100" step="1" ' +
             'value="" placeholder="' + currentVal + '%" data-row="' + r.row + '" data-kind="pct" data-step="' + s + '" ' +
             ' oninput="onEdit(this)">' +
@@ -633,6 +645,14 @@
       document.querySelectorAll('input.pct[data-row="' + row + '"]').forEach(function (inp) {
         const step = Number(inp.dataset.step);
         const currentVal = Math.round((rObj.steps[step] || 0) * 100);
+        if (currentVal >= 100) {
+          // This save just brought the step to 100% - lock it immediately
+          // instead of leaving an editable box up until the next reload.
+          const td = inp.closest('td');
+          td.className = 'locked-cell';
+          td.innerHTML = '100% &#10003;';
+          return;
+        }
         inp.value = '';
         inp.placeholder = currentVal + '%';
         inp.classList.remove('changed');
@@ -645,6 +665,12 @@
         const field = inp.dataset.field;
         const currentVal = rObj[field] || 0;
         const cap = Number(inp.dataset.cap) || 0;
+        if (cap > 0 && currentVal === cap) {
+          const td = inp.closest('td');
+          td.className = 'locked-cell';
+          td.innerHTML = currentVal + ' / ' + cap + ' &#10003;';
+          return;
+        }
         inp.value = '';
         inp.placeholder = currentVal;
         inp.classList.remove('changed');
