@@ -197,7 +197,7 @@
 
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwpKzNNuPr1mG90742Q6mjoc2YKGZke7w2Ht7bRzHPFWYDYwIW-zVPZccnefrta7ZFo/exec';
+    const APPS_SCRIPT_URL = 'PASTE_YOUR_PIPING_APPS_SCRIPT_EXEC_URL_HERE';
     const KEY = '246558e10ddec9f6ba40df8f';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
@@ -516,7 +516,17 @@
           input.classList.remove('invalid');
         } else {
           const v = Number(input.value);
-          if (isNaN(v) || v < 0 || (cap > 0 && v > cap)) {
+          // Fabrication/Welding are binary - only 0 or exactly Size (cap)
+          // is a valid entry, no partial counts.
+          const validBinary = !isNaN(v) && (v === 0 || (cap > 0 && v === cap));
+          let valid = validBinary;
+          if (field === 'welding' && validBinary && v !== 0) {
+            // Can't mark Welding done unless Fabrication is already done for
+            // this row - skipped if Fabrication doesn't apply to this row.
+            const fabricationSatisfied = !rObj.appliesFab || (Number(rObj.fabrication) || 0) === cap;
+            valid = fabricationSatisfied;
+          }
+          if (!valid) {
             input.classList.add('invalid');
             input.classList.remove('changed');
           } else {
@@ -524,6 +534,11 @@
             input.classList.add('changed');
             input.classList.remove('invalid');
           }
+        }
+        // If Fabrication just changed, Welding's already-typed value (if
+        // any) may no longer be valid - re-check it immediately.
+        if (field === 'fabrication') {
+          revalidateWeldingInput(row, rObj);
         }
       } else if (kind === 'text') {
         const field = input.dataset.field;
@@ -539,6 +554,29 @@
       recomputeRow(row);
       updateOverallPill();
       updateSaveButtonState();
+    }
+
+    /** Called whenever Fabrication changes for a row - if Welding already
+     *  has a typed value in its box, re-checks it against the new
+     *  Fabrication state (e.g. Fabrication was reset to 0 after Welding was
+     *  already marked done) and flags it invalid if it's no longer allowed. */
+    function revalidateWeldingInput(row, rObj) {
+      const inp = document.querySelector('input.num[data-row="' + row + '"][data-field="welding"]');
+      if (!inp || inp.value === '') return;
+      const v = Number(inp.value);
+      const cap = Number(inp.dataset.cap) || 0;
+      const validBinary = !isNaN(v) && (v === 0 || (cap > 0 && v === cap));
+      const fabricationSatisfied = !rObj.appliesFab || (Number(rObj.fabrication) || 0) === cap;
+      const valid = validBinary && (v === 0 || fabricationSatisfied);
+      if (!valid) {
+        inp.classList.add('invalid');
+        inp.classList.remove('changed');
+        rObj.welding = rObj.originalWelding;
+      } else {
+        inp.classList.add('changed');
+        inp.classList.remove('invalid');
+        rObj.welding = v;
+      }
     }
 
     function updateSaveButtonState() {
