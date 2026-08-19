@@ -179,6 +179,10 @@
         <input id="filterMaterialType" class="filter-input" type="text" list="materialTypeList" placeholder="All materials" autocomplete="off">
         <datalist id="materialTypeList"></datalist>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#222;white-space:nowrap;">
+        <input id="filterHideComplete" type="checkbox">
+        Hide completed rows
+      </label>
       <span id="dateLabel">Update date:</span>
       <input id="updateDate" type="date">
       <div id="status">Loading...</div>
@@ -421,6 +425,7 @@
         tr.dataset.dwgRef = String(r.dwgRef || '').toLowerCase();
         tr.dataset.joinNo = String(r.joinNo || '').toLowerCase();
         tr.dataset.materialType = String(r.materialType || '').toLowerCase();
+        tr.dataset.status = String(r.status || '').toLowerCase();
 
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
@@ -628,6 +633,9 @@
       const badge = document.querySelector('[data-status="' + row + '"]');
       badge.innerText = rObj.status;
       badge.className = 'badge ' + statusClass(rObj.status);
+
+      const tr = document.querySelector('tr[data-row="' + row + '"]');
+      if (tr) tr.dataset.status = String(rObj.status || '').toLowerCase();
     }
 
     /** After a successful save, blank the row's pct/num inputs again and
@@ -746,6 +754,7 @@
 
     function applyFilters() {
       const values = getActiveFilterValues();
+      const hideComplete = document.getElementById('filterHideComplete').checked;
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         const matches =
           (!values.costCenter || tr.dataset.costCenter.indexOf(values.costCenter) !== -1) &&
@@ -753,7 +762,8 @@
           (!values.project || tr.dataset.project.indexOf(values.project) !== -1) &&
           (!values.dwgRef || tr.dataset.dwgRef.indexOf(values.dwgRef) !== -1) &&
           (!values.joinNo || tr.dataset.joinNo.indexOf(values.joinNo) !== -1) &&
-          (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1);
+          (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1) &&
+          (!hideComplete || tr.dataset.status !== 'complete');
         tr.style.display = matches ? '' : 'none';
       });
       // Re-narrow every dropdown to match whatever's now active, so picking
@@ -764,6 +774,7 @@
     Object.keys(FILTER_FIELDS).forEach(function (field) {
       document.getElementById(FILTER_FIELDS[field].inputId).addEventListener('input', applyFilters);
     });
+    document.getElementById('filterHideComplete').addEventListener('change', applyFilters);
   </script>
 </body>
 </html>
