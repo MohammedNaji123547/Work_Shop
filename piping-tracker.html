@@ -202,7 +202,7 @@
 
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwpKzNNuPr1mG90742Q6mjoc2YKGZke7w2Ht7bRzHPFWYDYwIW-zVPZccnefrta7ZFo/exec';
+    const APPS_SCRIPT_URL = 'PASTE_YOUR_PIPING_APPS_SCRIPT_EXEC_URL_HERE';
     const KEY = '246558e10ddec9f6ba40df8f';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
@@ -398,6 +398,7 @@
     function renderHead() {
       const head = document.getElementById('headRow');
       let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th>' +
+        '<th class="left">DWG Ref.</th>' +
         '<th class="left">Spool No.</th><th class="left">Join No.</th><th class="left">Join Type</th><th>Size</th>' +
         '<th class="left">Material Type</th><th class="left">Welding Type</th>' +
         '<th class="th-count">Fabrication</th><th class="th-count">Welding</th>';
@@ -430,6 +431,7 @@
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
         html += '<td class="left">' + escapeHtml(r.project) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.dwgRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.spoolNo) + '</td>';
         html += '<td class="left">' + escapeHtml(r.joinNo) + '</td>';
         html += '<td class="left">' + escapeHtml(r.joinType) + '</td>';
