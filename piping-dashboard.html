@@ -106,6 +106,7 @@
         <div class="sub">Read-only progress report for a selected period, reconstructed from the Change Log.</div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;">
+        <a href="piping-productivity.html" style="color:#fff;font-size:12px;">Productivity Review</a>
         <span id="signedInAs" style="font-size:12px;opacity:0.85;"></span>
         <a href="#" onclick="signOut();return false;" style="color:#fff;font-size:12px;">Sign out</a>
       </div>
@@ -330,7 +331,7 @@
       let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th>' +
         '<th class="left">DWG Ref.</th><th class="left">Spool No.</th><th class="left">Join No.</th>' +
         '<th class="left">Join Type</th><th>Size</th><th class="left">Material Type</th><th class="left">Welding Type</th>' +
-        '<th class="th-count">Fabrication</th><th class="th-count">Welding</th>';
+        '<th class="th-count">Fabrication</th><th class="th-count">Welding</th><th class="left">Welding Date</th>';
       STEP_SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th class="left">Remark</th>';
       head.innerHTML = html;
@@ -397,6 +398,7 @@
         html += '<td class="' + fab.cls + '">' + fab.text + '</td>';
         const weld = fmtCount(r.welding, r.weldingSize);
         html += '<td class="' + weld.cls + '">' + weld.text + '</td>';
+        html += '<td class="left">' + escapeHtml(r.weldingDate) + '</td>';
 
         for (let s = 0; s < STEP_COUNT; s++) {
           const v = r.steps ? r.steps[s] : null;
@@ -493,8 +495,8 @@
 
     function exportToExcel() {
       const headers = ['Cost Center', 'CTR#', 'Project', 'DWG Ref.', 'Spool No.', 'Join No.', 'Join Type', 'Size',
-        'Material Type', 'Welding Type', 'Fabrication', 'Welding', 'PWHT', 'NDT', 'Hydrotest', 'Painting',
-        'Internal Painting', 'Cold Wrap', 'Remark'];
+        'Material Type', 'Welding Type', 'Fabrication', 'Welding', 'Welding Date', 'PWHT', 'NDT', 'Hydrotest',
+        'Painting', 'Internal Painting', 'Cold Wrap', 'Remark'];
       const rows = [headers];
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         if (tr.style.display === 'none') return; // only export what's currently visible/filtered
