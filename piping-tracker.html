@@ -115,6 +115,7 @@
   }
   input.changed { border-color: var(--amber); background: #FFF7E0; }
   input.invalid { border-color: #C0392B; background: #FDECEA; }
+  input.done { border-color: var(--green); background: #EAF7EC; }
   .current-val { font-size: 10px; color: var(--grey); margin-top: 3px; white-space: nowrap; }
   td.na-cell { color: var(--grey); font-style: italic; background: #F1F2F4 !important; }
   td.locked-cell { color: var(--green); font-weight: 700; background: #EAF7EC !important; }
@@ -455,8 +456,11 @@
           const currentVal = r[field] || 0;
           // Note: reaching Size (fully done) does NOT lock this cell -
           // it stays editable so a mistaken entry can be corrected here
-          // instead of needing to go into the Google Sheet directly.
-          html += '<td><input type="number" class="num" min="0" ' + (size > 0 ? 'max="' + size + '"' : '') + ' step="any" ' +
+          // instead of needing to go into the Google Sheet directly. It
+          // still gets a green "done" style so completed items are easy
+          // to spot at a glance.
+          const isDone = size > 0 && currentVal === size;
+          html += '<td><input type="number" class="num' + (isDone ? ' done' : '') + '" min="0" ' + (size > 0 ? 'max="' + size + '"' : '') + ' step="any" ' +
             'value="" placeholder="' + currentVal + '" data-row="' + r.row + '" data-kind="num" data-field="' + field + '" data-cap="' + size + '" ' +
             ' oninput="onEdit(this)">' +
             '<div class="current-val">Current: ' + currentVal + (size > 0 ? ' / ' + size : '') + '</div></td>';
@@ -530,6 +534,7 @@
           rObj[field] = field === 'fabrication' ? rObj.originalFabrication : rObj.originalWelding;
           input.classList.remove('changed');
           input.classList.remove('invalid');
+          input.classList.toggle('done', cap > 0 && (rObj[field] || 0) === cap);
         } else {
           const v = Number(input.value);
           // Fabrication/Welding are binary - only 0 or exactly Size (cap)
@@ -545,10 +550,12 @@
           if (!valid) {
             input.classList.add('invalid');
             input.classList.remove('changed');
+            input.classList.remove('done');
           } else {
             rObj[field] = v;
             input.classList.add('changed');
             input.classList.remove('invalid');
+            input.classList.toggle('done', cap > 0 && v === cap);
           }
         }
         // If Fabrication just changed, Welding's already-typed value (if
@@ -587,10 +594,12 @@
       if (!valid) {
         inp.classList.add('invalid');
         inp.classList.remove('changed');
+        inp.classList.remove('done');
         rObj.welding = rObj.originalWelding;
       } else {
         inp.classList.add('changed');
         inp.classList.remove('invalid');
+        inp.classList.toggle('done', cap > 0 && v === cap);
         rObj.welding = v;
       }
     }
@@ -673,11 +682,13 @@
         const currentVal = rObj[field] || 0;
         const cap = Number(inp.dataset.cap) || 0;
         // Note: reaching Size (fully done) does NOT lock this cell - see
-        // the matching comment in renderBody() above.
+        // the matching comment in renderBody() above. Still gets the green
+        // "done" style so it's obvious at a glance which items finished.
         inp.value = '';
         inp.placeholder = currentVal;
         inp.classList.remove('changed');
         inp.classList.remove('invalid');
+        inp.classList.toggle('done', cap > 0 && currentVal === cap);
         const label = inp.parentElement.querySelector('.current-val');
         if (label) label.innerText = 'Current: ' + currentVal + (cap > 0 ? ' / ' + cap : '');
       });
