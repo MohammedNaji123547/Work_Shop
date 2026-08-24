@@ -57,12 +57,6 @@
   }
   .filter-label { font-size: 11px; color: var(--grey); margin-bottom: 2px; }
   .filter-group { display: flex; flex-direction: column; flex: 1; min-width: 130px; }
-  #modeGroup { display: flex; flex-direction: column; gap: 4px; }
-  .mode-btns { display: flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
-  .mode-btn {
-    background: #fff; border: none; padding: 7px 12px; font-size: 12.5px; cursor: pointer; color: var(--navy);
-  }
-  .mode-btn.active { background: var(--navy); color: #fff; }
   #dateGroup { display: flex; gap: 8px; align-items: flex-end; }
   .date-field { display: flex; flex-direction: column; }
   .date-field input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; }
@@ -74,7 +68,7 @@
     background: var(--green); color: #fff; border: none; padding: 9px 16px; border-radius: 5px;
     font-size: 13px; font-weight: 600; cursor: pointer;
   }
-  #refreshBtn {
+  #refreshBtn, #clearFiltersBtn {
     background: #fff; color: var(--navy); border: 1px solid var(--border); padding: 9px 14px;
     border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer;
   }
@@ -84,12 +78,12 @@
   main { padding: 14px 20px 60px; }
   table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; }
   th, td { border: 1px solid var(--border); padding: 6px 7px; text-align: center; white-space: nowrap; }
-  th { background: var(--navy); color: #fff; font-weight: 600; position: sticky; top: 84px; z-index: 3; }
+  th { background: var(--navy); color: #fff; font-weight: 600; position: sticky; top: 68px; z-index: 3; }
   th.th-count { background: #B5651D; }
   td.left, th.left { text-align: left; }
   tr:nth-child(even) td { background: #FAFBFC; }
   td.na-cell { color: var(--grey); font-style: italic; background: #F1F2F4 !important; }
-  td.delta-cell { color: var(--navy); font-weight: 600; }
+  td.negative-cell { color: #C0392B; font-weight: 600; }
   td.remark-cell { text-align: left; max-width: 220px; white-space: normal; }
   #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
   #authError { display: none; color: #C0392B; }
@@ -108,7 +102,7 @@
     <header>
       <div>
         <h1>Piping Works - Progress Dashboard</h1>
-        <div class="sub">Read-only progress report, reconstructed from the Change Log.</div>
+        <div class="sub">Read-only progress report for a selected period, reconstructed from the Change Log.</div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;">
         <span id="signedInAs" style="font-size:12px;opacity:0.85;"></span>
@@ -117,24 +111,13 @@
     </header>
 
     <div id="topbar">
-      <div id="modeGroup">
-        <span class="filter-label">View</span>
-        <div class="mode-btns">
-          <button class="mode-btn active" id="modeAsOfBtn" onclick="setMode('asof')">As of date</button>
-          <button class="mode-btn" id="modeRangeBtn" onclick="setMode('range')">Date range</button>
-        </div>
-      </div>
       <div id="dateGroup">
-        <div class="date-field" id="asOfField">
-          <span class="filter-label">As of</span>
-          <input id="asOfDate" type="date">
-        </div>
-        <div class="date-field" id="startField" style="display:none;">
-          <span class="filter-label">From</span>
+        <div class="date-field">
+          <span class="filter-label">Start Period</span>
           <input id="startDate" type="date">
         </div>
-        <div class="date-field" id="endField" style="display:none;">
-          <span class="filter-label">To</span>
+        <div class="date-field">
+          <span class="filter-label">End Period</span>
           <input id="endDate" type="date">
         </div>
       </div>
@@ -169,6 +152,7 @@
         <input id="filterMaterialType" class="filter-input" type="text" list="materialTypeList" placeholder="All materials" autocomplete="off">
         <datalist id="materialTypeList"></datalist>
       </div>
+      <button id="clearFiltersBtn" onclick="clearFilters()">Clear Filters</button>
       <div id="status">Loading...</div>
       <button id="refreshBtn" onclick="loadDashboard()">Refresh</button>
       <button id="exportBtn" onclick="exportToExcel()">Export to Excel</button>
@@ -188,8 +172,8 @@
   <script>
     // ---- Configure these to match your Apps Script deployment and OAuth setup ----
     // Same backend as piping-tracker.html - this page only ever sends the
-    // read-only 'dashboardSnapshot' / 'dashboardRange' actions, gated by the
-    // separate ALLOWED_VIEWER_EMAILS list in Piping_Code.gs.
+    // read-only 'dashboardPeriod' action, gated by the separate
+    // ALLOWED_VIEWER_EMAILS list in Piping_Code.gs.
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwpKzNNuPr1mG90742Q6mjoc2YKGZke7w2Ht7bRzHPFWYDYwIW-zVPZccnefrta7ZFo/exec';
     const KEY = '246558e10ddec9f6ba40df8f';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
@@ -197,8 +181,7 @@
 
     let idToken = null;
     let signedInEmail = '';
-    let ROWS = [];       // normalized rows for whichever mode is active
-    let mode = 'asof';   // 'asof' or 'range'
+    let ROWS = [];
     let silentRefreshTimer = null;
 
     // Order matches exactly what was asked for: Cost Center, CTR#, Project,
@@ -228,7 +211,6 @@
       if (alreadySignedIn) return; // silent background token refresh, see below
       document.getElementById('signInScreen').style.display = 'none';
       document.getElementById('appScreen').style.display = 'block';
-      document.getElementById('asOfDate').value = todayStr();
       document.getElementById('startDate').value = daysAgoStr(7);
       document.getElementById('endDate').value = todayStr();
       loadDashboard();
@@ -263,19 +245,9 @@
       google.accounts.id.renderButton(document.getElementById('gSignInBtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
     };
 
-    function setMode(m) {
-      mode = m;
-      document.getElementById('modeAsOfBtn').classList.toggle('active', m === 'asof');
-      document.getElementById('modeRangeBtn').classList.toggle('active', m === 'range');
-      document.getElementById('asOfField').style.display = m === 'asof' ? 'flex' : 'none';
-      document.getElementById('startField').style.display = m === 'range' ? 'flex' : 'none';
-      document.getElementById('endField').style.display = m === 'range' ? 'flex' : 'none';
-      renderHead();
-    }
-
-    /** Fetches from the Apps Script backend with one retry on transient
-     *  failures (a slow cold start, or the raw HTML error page Apps Script
-     *  occasionally returns) before surfacing an error to the user. */
+    /** Fetches from the Apps Script backend with a couple of retries on
+     *  transient failures (a slow cold start, or the raw HTML error page
+     *  Apps Script occasionally returns) before surfacing an error. */
     function fetchWithRetry(body, attempt) {
       attempt = attempt || 1;
       return fetch(APPS_SCRIPT_URL, {
@@ -304,16 +276,18 @@
       document.getElementById('boqTable').style.display = 'none';
       document.getElementById('emptyState').style.display = 'none';
 
-      const body = mode === 'asof'
-        ? { key: KEY, token: idToken, action: 'dashboardSnapshot', asOfDate: document.getElementById('asOfDate').value || todayStr() }
-        : { key: KEY, token: idToken, action: 'dashboardRange', startDate: document.getElementById('startDate').value, endDate: document.getElementById('endDate').value };
+      const body = {
+        key: KEY, token: idToken, action: 'dashboardPeriod',
+        startDate: document.getElementById('startDate').value || daysAgoStr(7),
+        endDate: document.getElementById('endDate').value || todayStr()
+      };
 
       fetchWithRetry(body)
         .then(function (data) {
           if (data.error) throw new Error(data.error);
           signedInEmail = data.email || '';
           document.getElementById('signedInAs').innerText = 'Signed in as ' + signedInEmail;
-          ROWS = mode === 'asof' ? normalizeAsOfRows(data.rows) : mergeRangeRows(data.startRows, data.endRows);
+          ROWS = data.rows || [];
           renderHead();
           renderBody();
           populateFilterOptions();
@@ -326,41 +300,6 @@
           document.getElementById('loading').style.display = 'none';
           setStatus('Load failed: ' + (err.message || err), 'err');
         });
-    }
-
-    function normalizeAsOfRows(rows) {
-      return (rows || []).map(function (r) {
-        return {
-          row: r.row, costCenter: r.costCenter, ctrNum: r.ctrNum, project: r.project, dwgRef: r.dwgRef,
-          spoolNo: r.spoolNo, joinNo: r.joinNo, joinType: r.joinType, size: r.size, materialType: r.materialType,
-          weldingType: r.weldingType,
-          fabricationStart: null, fabricationEnd: r.fabrication,
-          weldingStart: null, weldingEnd: r.welding,
-          stepsStart: null, stepsEnd: r.steps,
-          remarkEnd: r.remark
-        };
-      });
-    }
-
-    /** Zips the start-of-period and end-of-period snapshots together by row
-     *  number (both arrays come from the same underlying sheet read on the
-     *  server, so they're the same length/order, but matching by row number
-     *  is more explicit and safer). */
-    function mergeRangeRows(startRows, endRows) {
-      const startByRow = {};
-      (startRows || []).forEach(function (r) { startByRow[r.row] = r; });
-      return (endRows || []).map(function (endR) {
-        const startR = startByRow[endR.row] || endR;
-        return {
-          row: endR.row, costCenter: endR.costCenter, ctrNum: endR.ctrNum, project: endR.project, dwgRef: endR.dwgRef,
-          spoolNo: endR.spoolNo, joinNo: endR.joinNo, joinType: endR.joinType, size: endR.size,
-          materialType: endR.materialType, weldingType: endR.weldingType,
-          fabricationStart: startR.fabrication, fabricationEnd: endR.fabrication,
-          weldingStart: startR.welding, weldingEnd: endR.welding,
-          stepsStart: startR.steps, stepsEnd: endR.steps,
-          remarkEnd: endR.remark
-        };
-      });
     }
 
     function populateFilterOptions() {
@@ -392,26 +331,24 @@
       head.innerHTML = html;
     }
 
-    /** Fabrication/Welding are counts (e.g. "3 / 5"); percentage steps show
-     *  "40%". In range mode, if the value actually changed within the
-     *  period it's shown as "start &rarr; end" and highlighted; unchanged
-     *  values just show the single current value. */
-    function fmtCount(startV, endV, size) {
-      if (endV === null || endV === undefined) return { text: 'N/A', cls: 'na-cell' };
-      const sizeTxt = size ? (' / ' + size) : '';
-      if (mode === 'range' && startV !== null && startV !== undefined && startV !== endV) {
-        return { text: startV + sizeTxt + ' &rarr; ' + endV + sizeTxt, cls: 'delta-cell' };
-      }
-      return { text: endV + sizeTxt, cls: '' };
+    /** Fabrication/Welding: the latest value logged within the selected
+     *  period, paired with the Size that was recorded at that same time
+     *  (not today's live Size - keeps achieved/Size always consistent even
+     *  if Size gets corrected later). */
+    function fmtCount(value, size) {
+      if (value === null || value === undefined) return { text: 'N/A', cls: 'na-cell' };
+      const sizeTxt = (size !== null && size !== undefined) ? (' / ' + size) : '';
+      return { text: value + sizeTxt, cls: '' };
     }
-    function fmtPct(startV, endV) {
-      if (endV === null || endV === undefined) return { text: 'N/A', cls: 'na-cell' };
-      const endPct = Math.round(endV * 100) + '%';
-      if (mode === 'range' && startV !== null && startV !== undefined) {
-        const startPct = Math.round(startV * 100) + '%';
-        if (startPct !== endPct) return { text: startPct + ' &rarr; ' + endPct, cls: 'delta-cell' };
-      }
-      return { text: endPct, cls: '' };
+
+    /** Percentage steps: the sum of every increment logged within the
+     *  period - how much progress was actually added during that window.
+     *  Can be negative if a correction reduced progress during the window. */
+    function fmtPct(value) {
+      if (value === null || value === undefined) return { text: 'N/A', cls: 'na-cell' };
+      const pct = Math.round(value * 100);
+      const text = (pct > 0 ? '+' : '') + pct + '%';
+      return { text: text, cls: pct < 0 ? 'negative-cell' : '' };
     }
 
     function renderBody() {
@@ -438,20 +375,18 @@
         html += '<td class="left">' + escapeHtml(r.materialType) + '</td>';
         html += '<td class="left">' + escapeHtml(r.weldingType) + '</td>';
 
-        const size = Number(r.size) || 0;
-        const fab = fmtCount(r.fabricationStart, r.fabricationEnd, size);
+        const fab = fmtCount(r.fabrication, r.fabricationSize);
         html += '<td class="' + fab.cls + '">' + fab.text + '</td>';
-        const weld = fmtCount(r.weldingStart, r.weldingEnd, size);
+        const weld = fmtCount(r.welding, r.weldingSize);
         html += '<td class="' + weld.cls + '">' + weld.text + '</td>';
 
         for (let s = 0; s < STEP_COUNT; s++) {
-          const startV = r.stepsStart ? r.stepsStart[s] : null;
-          const endV = r.stepsEnd ? r.stepsEnd[s] : null;
-          const cell = fmtPct(startV, endV);
+          const v = r.steps ? r.steps[s] : null;
+          const cell = fmtPct(v);
           html += '<td class="' + cell.cls + '">' + cell.text + '</td>';
         }
 
-        html += '<td class="remark-cell">' + escapeHtml(r.remarkEnd) + '</td>';
+        html += '<td class="remark-cell">' + escapeHtml(r.remark) + '</td>';
 
         tr.innerHTML = html;
         body.appendChild(tr);
@@ -520,6 +455,16 @@
       narrowFilterOptions();
     }
 
+    /** Resets the six cross-narrowing filters back to "show everything" -
+     *  does NOT touch Start/End Period, since that's the report window
+     *  itself rather than a row filter. */
+    function clearFilters() {
+      Object.keys(FILTER_FIELDS).forEach(function (field) {
+        document.getElementById(FILTER_FIELDS[field].inputId).value = '';
+      });
+      applyFilters();
+    }
+
     Object.keys(FILTER_FIELDS).forEach(function (field) {
       document.getElementById(FILTER_FIELDS[field].inputId).addEventListener('input', applyFilters);
     });
@@ -532,16 +477,15 @@
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         if (tr.style.display === 'none') return; // only export what's currently visible/filtered
         const rowData = [];
-        tr.querySelectorAll('td').forEach(function (td) { rowData.push(td.innerText.replace(/→/g, '->')); });
+        tr.querySelectorAll('td').forEach(function (td) { rowData.push(td.innerText); });
         rows.push(rowData);
       });
       const ws = XLSX.utils.aoa_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
-      const label = mode === 'asof'
-        ? (document.getElementById('asOfDate').value || todayStr())
-        : (document.getElementById('startDate').value + '_to_' + document.getElementById('endDate').value);
-      XLSX.writeFile(wb, 'Piping_Dashboard_' + label + '.xlsx');
+      const startD = document.getElementById('startDate').value || daysAgoStr(7);
+      const endD = document.getElementById('endDate').value || todayStr();
+      XLSX.writeFile(wb, 'Piping_Dashboard_' + startD + '_to_' + endD + '.xlsx');
     }
 
     function setStatus(text, cls) {
