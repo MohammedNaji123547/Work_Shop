@@ -407,11 +407,16 @@
 
     function renderGauges() {
       const grid = document.getElementById('gaugeGrid');
+      // NOTE: activity names are set via a data-attribute + addEventListener
+      // below rather than an inline onclick="openDrilldown('...')" string -
+      // JSON.stringify()/quoting an activity name directly into an
+      // onclick="..." attribute breaks the HTML (the attribute is also
+      // double-quoted) and silently kills the click handler.
       grid.innerHTML = DATA.activities.map(function (a) {
         const o = overallFor(a);
         const pct = o.applicable > 0 ? o.complete / o.applicable : 0;
         const periodCount = (DATA.periodCompletions[a] || []).length;
-        return '<div class="gauge-card" onclick="openDrilldown(' + JSON.stringify(a) + ')">' +
+        return '<div class="gauge-card" data-activity="' + escapeHtml(a) + '">' +
           '<div class="act-name">' + escapeHtml(a) + '</div>' +
           '<div class="gauge-fig">' + gaugeSvg(pct) + '</div>' +
           '<div class="gauge-stat">' + o.complete + ' / ' + o.applicable + ' complete</div>' +
@@ -419,6 +424,9 @@
           '<div class="click-hint">Click for details</div>' +
           '</div>';
       }).join('');
+      grid.querySelectorAll('.gauge-card').forEach(function (card) {
+        card.addEventListener('click', function () { openDrilldown(card.dataset.activity); });
+      });
     }
 
     function renderProjectBreakdown() {
