@@ -10,7 +10,11 @@
     --navy: #1F4E78;
     --navy-light: #EAF1F8;
     --green: #2E7D32;
+    --green-light: #EAF7EC;
     --amber: #E6A100;
+    --amber-light: #FFF6E0;
+    --red: #C0392B;
+    --red-light: #FBEAE8;
     --grey: #8A8F98;
     --border: #D8DEE6;
   }
@@ -59,29 +63,78 @@
   }
   #status { font-size: 12px; color: var(--grey); min-width: 140px; }
   #status.ok { color: var(--green); font-weight: 600; }
-  #status.err { color: #C0392B; font-weight: 600; }
-  main { padding: 14px 20px 60px; max-width: 900px; margin: 0 auto; }
-  .card {
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 18px 20px;
-    margin-bottom: 22px;
+  #status.err { color: var(--red); font-weight: 600; }
+  main { padding: 18px 20px 60px; max-width: 1100px; margin: 0 auto; }
+  section.block { margin-bottom: 26px; }
+  section.block h2 { font-size: 15px; margin: 0 0 3px; color: var(--navy); }
+  section.block .desc { font-size: 12px; color: var(--grey); margin-bottom: 14px; }
+
+  /* KPI cards */
+  #kpiRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .kpi-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; text-align: left;
   }
-  .card h2 { font-size: 15px; margin: 0 0 4px; color: var(--navy); }
-  .card .desc { font-size: 12px; color: var(--grey); margin-bottom: 14px; }
-  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 13px; }
-  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: center; }
-  th { background: var(--navy-light); color: var(--navy); font-weight: 600; }
-  td.left, th.left { text-align: left; }
-  tr:nth-child(even) td { background: #FAFBFC; }
-  td.count-val { font-weight: 700; color: var(--navy); font-size: 14px; }
-  td.pct-high { color: var(--green); font-weight: 700; }
-  td.pct-mid { color: var(--amber); font-weight: 700; }
-  td.pct-low { color: var(--grey); }
+  .kpi-card .kpi-label { font-size: 11.5px; color: var(--grey); font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+  .kpi-card .kpi-value { font-size: 26px; font-weight: 700; color: var(--navy); margin-top: 4px; }
+  .kpi-card .kpi-sub { font-size: 11.5px; color: var(--grey); margin-top: 2px; }
+
+  /* Gauge cards */
+  #gaugeGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+  .gauge-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; text-align: center; cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .gauge-card:hover { box-shadow: 0 4px 14px rgba(31,78,120,0.14); transform: translateY(-2px); }
+  .gauge-card .act-name { font-size: 13px; font-weight: 700; color: #222; margin-bottom: 6px; }
+  .gauge-card .gauge-fig { display: flex; justify-content: center; }
+  .gauge-card .gauge-stat { font-size: 11.5px; color: var(--grey); margin-top: 6px; }
+  .gauge-card .period-badge {
+    display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 20px;
+    font-size: 11.5px; font-weight: 700; background: var(--navy-light); color: var(--navy);
+  }
+  .gauge-card .click-hint { font-size: 10.5px; color: var(--grey); margin-top: 6px; opacity: 0; transition: opacity .15s; }
+  .gauge-card:hover .click-hint { opacity: 1; }
+
+  /* Project breakdown bars */
+  .proj-list { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+  .proj-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #F0F2F5; }
+  .proj-row:last-child { border-bottom: none; }
+  .proj-name { flex: 0 0 220px; font-size: 12.5px; font-weight: 600; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-bar-track { flex: 1; background: #EEF1F5; border-radius: 6px; height: 14px; overflow: hidden; }
+  .proj-bar-fill { height: 100%; background: linear-gradient(90deg, var(--navy), #3E7CB1); border-radius: 6px; }
+  .proj-count { flex: 0 0 30px; text-align: right; font-size: 12.5px; font-weight: 700; color: var(--navy); }
+
   #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
-  #authError { display: none; color: #C0392B; }
+  #authError { display: none; color: var(--red); }
+  #emptyProj, #emptyReport { padding: 16px; text-align: center; color: var(--grey); font-size: 13px; }
   a.nav-link { color: #fff; font-size: 12px; }
+
+  /* Drill-down modal */
+  #modalOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(20,30,40,0.5);
+    z-index: 50; align-items: center; justify-content: center; padding: 20px;
+  }
+  #modalBox {
+    background: #fff; border-radius: 10px; max-width: 900px; width: 100%; max-height: 85vh;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #modalHeader {
+    background: var(--navy); color: #fff; padding: 14px 18px; display: flex;
+    align-items: center; justify-content: space-between;
+  }
+  #modalHeader h3 { margin: 0; font-size: 15px; }
+  #modalClose { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
+  #modalBody { padding: 16px 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 720px) { #modalBody { grid-template-columns: 1fr; } }
+  .drill-col h4 { font-size: 13px; margin: 0 0 8px; }
+  .drill-col h4.completed-h { color: var(--green); }
+  .drill-col h4.remaining-h { color: var(--amber); }
+  table.drill-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  table.drill-table th, table.drill-table td { border: 1px solid var(--border); padding: 5px 7px; text-align: left; }
+  table.drill-table th { background: #F5F7FA; font-weight: 600; }
+  .drill-empty { font-size: 12px; color: var(--grey); padding: 10px 0; }
 </style>
 </head>
 <body>
@@ -123,28 +176,48 @@
 
     <main>
       <div id="loading">Loading productivity report...</div>
-      <div id="authError">Could not load data. Check that APPS_, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
+      <div id="authError">Could not load data. Check that APPS_SCRIPT_URL, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
 
       <div id="reportBody" style="display:none;">
-        <div class="card">
-          <h2>Completed in Selected Period</h2>
-          <div class="desc">How many distinct joints reached "done" for each activity during the selected Start/End Period (Fabrication/Welding = reached full Size; the other steps = reached 100%). A joint toggled done more than once in the period is still only counted once.</div>
-          <table>
-            <thead><tr><th class="left">Activity</th><th>Joints Completed</th></tr></thead>
-            <tbody id="periodBody"></tbody>
-          </table>
-        </div>
+        <section class="block">
+          <div id="kpiRow"></div>
+        </section>
 
-        <div class="card">
-          <h2>Overall Completion (as of today)</h2>
-          <div class="desc">Live totals, not limited to the selected period: how many joints are fully done right now out of how many that activity actually applies to.</div>
-          <table>
-            <thead><tr><th class="left">Activity</th><th>Complete</th><th>Applicable</th><th>%</th></tr></thead>
-            <tbody id="overallBody"></tbody>
-          </table>
-        </div>
+        <section class="block">
+          <h2>Completion by Activity</h2>
+          <div class="desc">Each gauge is the live overall completion for that activity (complete / applicable). The badge shows how many joints were completed in your selected period. Click a card to see exactly which joints.</div>
+          <div id="gaugeGrid"></div>
+        </section>
+
+        <section class="block">
+          <h2>Completions by Project (selected period)</h2>
+          <div class="desc">Total joint-activity completions during the selected period, grouped by Project. A joint that completed two different activities in the period counts once per activity.</div>
+          <div class="proj-list">
+            <div id="projRows"></div>
+            <div id="emptyProj" style="display:none;">No completions recorded in this period.</div>
+          </div>
+        </section>
       </div>
     </main>
+  </div>
+
+  <div id="modalOverlay" onclick="if(event.target===this) closeDrilldown();">
+    <div id="modalBox">
+      <div id="modalHeader">
+        <h3 id="modalTitle"></h3>
+        <button id="modalClose" onclick="closeDrilldown()">&times;</button>
+      </div>
+      <div id="modalBody">
+        <div class="drill-col">
+          <h4 class="completed-h" id="completedHeading"></h4>
+          <div id="completedList"></div>
+        </div>
+        <div class="drill-col">
+          <h4 class="remaining-h" id="remainingHeading"></h4>
+          <div id="remainingList"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -160,6 +233,7 @@
     let idToken = null;
     let signedInEmail = '';
     let silentRefreshTimer = null;
+    let DATA = { activities: [], periodCompletions: {}, liveRows: [] };
 
     function todayStr() {
       const d = new Date();
@@ -256,8 +330,14 @@
           if (data.error) throw new Error(data.error);
           signedInEmail = data.email || '';
           document.getElementById('signedInAs').innerText = 'Signed in as ' + signedInEmail;
-          renderPeriodTable(data.activities || [], data.periodCounts || []);
-          renderOverallTable(data.activities || [], data.overall || []);
+          DATA = {
+            activities: data.activities || [],
+            periodCompletions: data.periodCompletions || {},
+            liveRows: data.liveRows || []
+          };
+          renderKPIs();
+          renderGauges();
+          renderProjectBreakdown();
           document.getElementById('loading').style.display = 'none';
           document.getElementById('reportBody').style.display = 'block';
           setStatus('Loaded.', 'ok');
@@ -268,27 +348,146 @@
         });
     }
 
-    function renderPeriodTable(activities, counts) {
-      const body = document.getElementById('periodBody');
-      let html = '';
-      activities.forEach(function (a, i) {
-        const c = counts[i] || 0;
-        html += '<tr><td class="left">' + escapeHtml(a) + '</td><td class="count-val">' + c + '</td></tr>';
+    /** Live complete/applicable count for one activity, across all rows. */
+    function overallFor(activity) {
+      let complete = 0, applicable = 0;
+      DATA.liveRows.forEach(function (r) {
+        if (r.applies[activity]) {
+          applicable++;
+          if (r.complete[activity]) complete++;
+        }
       });
-      body.innerHTML = html;
+      return { complete: complete, applicable: applicable };
     }
 
-    function renderOverallTable(activities, overall) {
-      const body = document.getElementById('overallBody');
-      let html = '';
-      activities.forEach(function (a, i) {
-        const o = overall[i] || { complete: 0, applicable: 0 };
-        const pct = o.applicable > 0 ? Math.round((o.complete / o.applicable) * 100) : 0;
-        const cls = o.applicable === 0 ? 'pct-low' : (pct >= 100 ? 'pct-high' : (pct >= 50 ? 'pct-mid' : 'pct-low'));
-        html += '<tr><td class="left">' + escapeHtml(a) + '</td><td>' + o.complete + '</td><td>' + o.applicable +
-          '</td><td class="' + cls + '">' + (o.applicable > 0 ? pct + '%' : 'N/A') + '</td></tr>';
+    function renderKPIs() {
+      const totalJoints = DATA.liveRows.length;
+      let totalApplicable = 0, totalComplete = 0, periodTotal = 0;
+      DATA.activities.forEach(function (a) {
+        const o = overallFor(a);
+        totalApplicable += o.applicable;
+        totalComplete += o.complete;
+        periodTotal += (DATA.periodCompletions[a] || []).length;
       });
-      body.innerHTML = html;
+      const overallPct = totalApplicable > 0 ? Math.round((totalComplete / totalApplicable) * 100) : 0;
+      const startD = document.getElementById('startDate').value;
+      const endD = document.getElementById('endDate').value;
+
+      const cards = [
+        { label: 'Joints Tracked', value: totalJoints, sub: 'Total rows in the BOQ' },
+        { label: 'Overall Completion', value: overallPct + '%', sub: totalComplete + ' / ' + totalApplicable + ' activity-steps done' },
+        { label: 'Completed This Period', value: periodTotal, sub: 'Activity completions, ' + startD + ' to ' + endD },
+        { label: 'Activities Tracked', value: DATA.activities.length, sub: 'Fabrication, Welding + 6 QC/coating steps' }
+      ];
+      document.getElementById('kpiRow').innerHTML = cards.map(function (c) {
+        return '<div class="kpi-card"><div class="kpi-label">' + escapeHtml(c.label) + '</div>' +
+          '<div class="kpi-value">' + escapeHtml(String(c.value)) + '</div>' +
+          '<div class="kpi-sub">' + escapeHtml(c.sub) + '</div></div>';
+      }).join('');
+    }
+
+    /** Builds an SVG ring gauge showing pct (0-1), color-coded by threshold. */
+    function gaugeSvg(pct, size) {
+      size = size || 92;
+      const stroke = 9;
+      const r = (size - stroke) / 2;
+      const c = 2 * Math.PI * r;
+      const clamped = Math.max(0, Math.min(1, pct));
+      const offset = c * (1 - clamped);
+      const color = clamped >= 0.8 ? 'var(--green)' : (clamped >= 0.4 ? 'var(--amber)' : 'var(--red)');
+      const cx = size / 2, cy = size / 2;
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#E8ECF1" stroke-width="' + stroke + '"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + stroke + '" ' +
+        'stroke-linecap="round" stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '" ' +
+        'transform="rotate(-90 ' + cx + ' ' + cy + ')"/>' +
+        '<text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" font-size="' + (size * 0.24) + '" font-weight="700" fill="#222">' +
+        Math.round(clamped * 100) + '%</text></svg>';
+    }
+
+    function renderGauges() {
+      const grid = document.getElementById('gaugeGrid');
+      grid.innerHTML = DATA.activities.map(function (a) {
+        const o = overallFor(a);
+        const pct = o.applicable > 0 ? o.complete / o.applicable : 0;
+        const periodCount = (DATA.periodCompletions[a] || []).length;
+        return '<div class="gauge-card" onclick="openDrilldown(' + JSON.stringify(a) + ')">' +
+          '<div class="act-name">' + escapeHtml(a) + '</div>' +
+          '<div class="gauge-fig">' + gaugeSvg(pct) + '</div>' +
+          '<div class="gauge-stat">' + o.complete + ' / ' + o.applicable + ' complete</div>' +
+          '<div class="period-badge">+' + periodCount + ' this period</div>' +
+          '<div class="click-hint">Click for details</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function renderProjectBreakdown() {
+      const totals = {}; // project -> count
+      DATA.activities.forEach(function (a) {
+        (DATA.periodCompletions[a] || []).forEach(function (j) {
+          const p = j.project || '(no project)';
+          totals[p] = (totals[p] || 0) + 1;
+        });
+      });
+      const rows = Object.keys(totals).map(function (p) { return { project: p, count: totals[p] }; })
+        .sort(function (x, y) { return y.count - x.count; });
+
+      const container = document.getElementById('projRows');
+      const empty = document.getElementById('emptyProj');
+      if (rows.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      const max = rows[0].count;
+      container.innerHTML = rows.map(function (r) {
+        const widthPct = max > 0 ? Math.max(4, Math.round((r.count / max) * 100)) : 0;
+        return '<div class="proj-row">' +
+          '<div class="proj-name" title="' + escapeHtml(r.project) + '">' + escapeHtml(r.project) + '</div>' +
+          '<div class="proj-bar-track"><div class="proj-bar-fill" style="width:' + widthPct + '%"></div></div>' +
+          '<div class="proj-count">' + r.count + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    /** Drill-down: completed (from periodCompletions, with date) + remaining
+     *  (live rows where the activity applies but isn't complete yet). */
+    function openDrilldown(activity) {
+      const completed = (DATA.periodCompletions[activity] || []);
+      const remaining = DATA.liveRows.filter(function (r) { return r.applies[activity] && !r.complete[activity]; });
+
+      document.getElementById('modalTitle').innerText = activity + ' - Drill Down';
+      document.getElementById('completedHeading').innerText = 'Completed this period (' + completed.length + ')';
+      document.getElementById('remainingHeading').innerText = 'Remaining (' + remaining.length + ')';
+
+      document.getElementById('completedList').innerHTML = completed.length === 0
+        ? '<div class="drill-empty">No joints completed for this activity in the selected period.</div>'
+        : drillTable(completed, true);
+
+      document.getElementById('remainingList').innerHTML = remaining.length === 0
+        ? '<div class="drill-empty">Nothing outstanding - every applicable joint is complete.</div>'
+        : drillTable(remaining, false);
+
+      document.getElementById('modalOverlay').style.display = 'flex';
+    }
+
+    function drillTable(rows, withDate) {
+      let html = '<table class="drill-table"><thead><tr>' +
+        '<th>Cost Center</th><th>CTR#</th><th>Project</th><th>DWG Ref.</th><th>Join No.</th><th>Size</th>' +
+        (withDate ? '<th>Date</th>' : '') + '</tr></thead><tbody>';
+      rows.forEach(function (r) {
+        html += '<tr><td>' + escapeHtml(r.costCenter) + '</td><td>' + escapeHtml(r.ctrNum) + '</td>' +
+          '<td>' + escapeHtml(r.project) + '</td><td>' + escapeHtml(r.dwgRef) + '</td>' +
+          '<td>' + escapeHtml(r.joinNo) + '</td><td>' + escapeHtml(r.size) + '</td>' +
+          (withDate ? '<td>' + escapeHtml(r.date) + '</td>' : '') + '</tr>';
+      });
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function closeDrilldown() {
+      document.getElementById('modalOverlay').style.display = 'none';
     }
 
     function setStatus(text, cls) {
