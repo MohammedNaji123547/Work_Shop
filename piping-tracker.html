@@ -453,12 +453,9 @@
             return;
           }
           const currentVal = r[field] || 0;
-          if (size > 0 && currentVal === size) {
-            // Already fully done - locked, no further edits from the HTML.
-            // Correcting a mistake here means editing the sheet directly.
-            html += '<td class="locked-cell">' + currentVal + ' / ' + size + ' &#10003;</td>';
-            return;
-          }
+          // Note: reaching Size (fully done) does NOT lock this cell -
+          // it stays editable so a mistaken entry can be corrected here
+          // instead of needing to go into the Google Sheet directly.
           html += '<td><input type="number" class="num" min="0" ' + (size > 0 ? 'max="' + size + '"' : '') + ' step="any" ' +
             'value="" placeholder="' + currentVal + '" data-row="' + r.row + '" data-kind="num" data-field="' + field + '" data-cap="' + size + '" ' +
             ' oninput="onEdit(this)">' +
@@ -675,12 +672,8 @@
         const field = inp.dataset.field;
         const currentVal = rObj[field] || 0;
         const cap = Number(inp.dataset.cap) || 0;
-        if (cap > 0 && currentVal === cap) {
-          const td = inp.closest('td');
-          td.className = 'locked-cell';
-          td.innerHTML = currentVal + ' / ' + cap + ' &#10003;';
-          return;
-        }
+        // Note: reaching Size (fully done) does NOT lock this cell - see
+        // the matching comment in renderBody() above.
         inp.value = '';
         inp.placeholder = currentVal;
         inp.classList.remove('changed');
