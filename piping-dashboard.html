@@ -84,6 +84,7 @@
   tr:nth-child(even) td { background: #FAFBFC; }
   td.na-cell { color: var(--grey); font-style: italic; background: #F1F2F4 !important; }
   td.negative-cell { color: #C0392B; font-weight: 600; }
+  td.done-cell { color: var(--green); font-weight: 700; background: #EAF7EC !important; }
   td.remark-cell { text-align: left; max-width: 220px; white-space: normal; }
   #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
   #authError { display: none; color: #C0392B; }
@@ -152,6 +153,10 @@
         <input id="filterMaterialType" class="filter-input" type="text" list="materialTypeList" placeholder="All materials" autocomplete="off">
         <datalist id="materialTypeList"></datalist>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#222;white-space:nowrap;">
+        <input id="filterNotStarted" type="checkbox">
+        Not started rows only
+      </label>
       <button id="clearFiltersBtn" onclick="clearFilters()">Clear Filters</button>
       <div id="status">Loading...</div>
       <button id="refreshBtn" onclick="loadDashboard()">Refresh</button>
@@ -338,7 +343,8 @@
     function fmtCount(value, size) {
       if (value === null || value === undefined) return { text: 'N/A', cls: 'na-cell' };
       const sizeTxt = (size !== null && size !== undefined) ? (' / ' + size) : '';
-      return { text: value + sizeTxt, cls: '' };
+      const isDone = size !== null && size !== undefined && size > 0 && value === size;
+      return { text: value + sizeTxt, cls: isDone ? 'done-cell' : '' };
     }
 
     /** Percentage steps: the sum of every increment logged within the
@@ -349,6 +355,17 @@
       const pct = Math.round(value * 100);
       const text = (pct > 0 ? '+' : '') + pct + '%';
       return { text: text, cls: pct < 0 ? 'negative-cell' : '' };
+    }
+
+    /** A row is "not started" for the selected period if every field that
+     *  actually applies to it (Fabrication, Welding, each percentage step)
+     *  shows zero activity - N/A fields (not applicable) don't count
+     *  against it. */
+    function isNotStarted(r) {
+      const fabOk = r.fabrication === null || r.fabrication === undefined || r.fabrication === 0;
+      const weldOk = r.welding === null || r.welding === undefined || r.welding === 0;
+      const stepsOk = (r.steps || []).every(function (v) { return v === null || v === undefined || v === 0; });
+      return fabOk && weldOk && stepsOk;
     }
 
     function renderBody() {
@@ -363,6 +380,7 @@
         tr.dataset.dwgRef = String(r.dwgRef || '').toLowerCase();
         tr.dataset.joinNo = String(r.joinNo || '').toLowerCase();
         tr.dataset.materialType = String(r.materialType || '').toLowerCase();
+        tr.dataset.notStarted = isNotStarted(r) ? '1' : '0';
 
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
@@ -439,6 +457,7 @@
 
     function applyFilters() {
       const values = getActiveFilterValues();
+      const notStartedOnly = document.getElementById('filterNotStarted').checked;
       let visibleCount = 0;
       document.querySelectorAll('#boqBody tr').forEach(function (tr) {
         const matches =
@@ -447,7 +466,8 @@
           (!values.project || tr.dataset.project.indexOf(values.project) !== -1) &&
           (!values.dwgRef || tr.dataset.dwgRef.indexOf(values.dwgRef) !== -1) &&
           (!values.joinNo || tr.dataset.joinNo.indexOf(values.joinNo) !== -1) &&
-          (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1);
+          (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1) &&
+          (!notStartedOnly || tr.dataset.notStarted === '1');
         tr.style.display = matches ? '' : 'none';
         if (matches) visibleCount++;
       });
@@ -455,19 +475,21 @@
       narrowFilterOptions();
     }
 
-    /** Resets the six cross-narrowing filters back to "show everything" -
-     *  does NOT touch Start/End Period, since that's the report window
-     *  itself rather than a row filter. */
+    /** Resets the six cross-narrowing filters and the "Not started" toggle
+     *  back to "show everything" - does NOT touch Start/End Period, since
+     *  that's the report window itself rather than a row filter. */
     function clearFilters() {
       Object.keys(FILTER_FIELDS).forEach(function (field) {
         document.getElementById(FILTER_FIELDS[field].inputId).value = '';
       });
+      document.getElementById('filterNotStarted').checked = false;
       applyFilters();
     }
 
     Object.keys(FILTER_FIELDS).forEach(function (field) {
       document.getElementById(FILTER_FIELDS[field].inputId).addEventListener('input', applyFilters);
     });
+    document.getElementById('filterNotStarted').addEventListener('change', applyFilters);
 
     function exportToExcel() {
       const headers = ['Cost Center', 'CTR#', 'Project', 'DWG Ref.', 'Spool No.', 'Join No.', 'Join Type', 'Size',
