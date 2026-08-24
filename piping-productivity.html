@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Piping Works - Productivity Review</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy: #1F4E78;
@@ -53,13 +54,22 @@
   .date-field { display: flex; flex-direction: column; }
   .filter-label { font-size: 11px; color: var(--grey); margin-bottom: 2px; }
   .date-field input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; }
+  .filter-group { display: flex; flex-direction: column; flex: 0 0 190px; }
+  .filter-input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: 13px; font-family: Arial, Helvetica, sans-serif;
+  }
   #loadBtn {
     background: var(--navy); color: #fff; border: none; padding: 9px 16px; border-radius: 5px;
     font-size: 13px; font-weight: 600; cursor: pointer;
   }
-  #refreshBtn {
+  #refreshBtn, #clearFilterBtn {
     background: #fff; color: var(--navy); border: 1px solid var(--border); padding: 9px 14px;
     border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #modalExportBtn {
+    background: var(--green); color: #fff; border: none; padding: 7px 14px; border-radius: 5px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer;
   }
   #status { font-size: 12px; color: var(--grey); min-width: 140px; }
   #status.ok { color: var(--green); font-weight: 600; }
@@ -170,6 +180,12 @@
         </div>
       </div>
       <button id="loadBtn" onclick="loadReport()">Load</button>
+      <div class="filter-group">
+        <span class="filter-label">Cost Center</span>
+        <input id="filterCostCenter" class="filter-input" type="text" list="costCenterList" placeholder="All cost centers" autocomplete="off">
+        <datalist id="costCenterList"></datalist>
+      </div>
+      <button id="clearFilterBtn" onclick="clearCostCenterFilter()">Clear Filter</button>
       <div id="status">Loading...</div>
       <button id="refreshBtn" onclick="loadReport()">Refresh</button>
     </div>
@@ -205,7 +221,10 @@
     <div id="modalBox">
       <div id="modalHeader">
         <h3 id="modalTitle"></h3>
-        <button id="modalClose" onclick="closeDrilldown()">&times;</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="modalExportBtn" onclick="exportDrilldown()">Export to Excel</button>
+          <button id="modalClose" onclick="closeDrilldown()">&times;</button>
+        </div>
       </div>
       <div id="modalBody">
         <div class="drill-col">
@@ -234,6 +253,13 @@
     let signedInEmail = '';
     let silentRefreshTimer = null;
     let DATA = { activities: [], periodCompletions: {}, liveRows: [] };
+    let costCenterFilter = '';
+    // Set whenever the drill-down modal is opened, so exportDrilldown() can
+    // reuse exactly what's on screen (already respecting the Cost Center
+    // filter) without recomputing anything.
+    let currentDrilldownActivity = '';
+    let currentCompletedRows = [];
+    let currentRemainingRows = [];
 
     function todayStr() {
       const d = new Date();
@@ -335,6 +361,7 @@
             periodCompletions: data.periodCompletions || {},
             liveRows: data.liveRows || []
           };
+          populateCostCenterOptions();
           renderKPIs();
           renderGauges();
           renderProjectBreakdown();
@@ -348,10 +375,60 @@
         });
     }
 
-    /** Live complete/applicable count for one activity, across all rows. */
+    /** Cost Center dropdown options - pulled from both liveRows and
+     *  periodCompletions so a cost center only present in older log history
+     *  (e.g. a row since deleted) still shows up as a valid filter value. */
+    function populateCostCenterOptions() {
+      const set = new Set();
+      DATA.liveRows.forEach(function (r) { if (r.costCenter) set.add(r.costCenter); });
+      DATA.activities.forEach(function (a) {
+        (DATA.periodCompletions[a] || []).forEach(function (j) { if (j.costCenter) set.add(j.costCenter); });
+      });
+      const options = Array.from(set).sort();
+      document.getElementById('costCenterList').innerHTML =
+        options.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+    }
+
+    /** Every render function below reads through these two getters instead
+     *  of DATA directly, so the single Cost Center filter applies
+     *  consistently to the KPI cards, gauges, project breakdown, and
+     *  drill-down modal all at once. */
+    function getFilteredLiveRows() {
+      if (!costCenterFilter) return DATA.liveRows;
+      return DATA.liveRows.filter(function (r) {
+        return String(r.costCenter || '').toLowerCase().indexOf(costCenterFilter) !== -1;
+      });
+    }
+
+    function getFilteredPeriodCompletions() {
+      if (!costCenterFilter) return DATA.periodCompletions;
+      const out = {};
+      DATA.activities.forEach(function (a) {
+        out[a] = (DATA.periodCompletions[a] || []).filter(function (j) {
+          return String(j.costCenter || '').toLowerCase().indexOf(costCenterFilter) !== -1;
+        });
+      });
+      return out;
+    }
+
+    function applyCostCenterFilter() {
+      costCenterFilter = document.getElementById('filterCostCenter').value.trim().toLowerCase();
+      renderKPIs();
+      renderGauges();
+      renderProjectBreakdown();
+    }
+
+    function clearCostCenterFilter() {
+      document.getElementById('filterCostCenter').value = '';
+      applyCostCenterFilter();
+    }
+
+    document.getElementById('filterCostCenter').addEventListener('input', applyCostCenterFilter);
+
+    /** Live complete/applicable count for one activity, across filtered rows. */
     function overallFor(activity) {
       let complete = 0, applicable = 0;
-      DATA.liveRows.forEach(function (r) {
+      getFilteredLiveRows().forEach(function (r) {
         if (r.applies[activity]) {
           applicable++;
           if (r.complete[activity]) complete++;
@@ -361,13 +438,14 @@
     }
 
     function renderKPIs() {
-      const totalJoints = DATA.liveRows.length;
+      const filteredPC = getFilteredPeriodCompletions();
+      const totalJoints = getFilteredLiveRows().length;
       let totalApplicable = 0, totalComplete = 0, periodTotal = 0;
       DATA.activities.forEach(function (a) {
         const o = overallFor(a);
         totalApplicable += o.applicable;
         totalComplete += o.complete;
-        periodTotal += (DATA.periodCompletions[a] || []).length;
+        periodTotal += (filteredPC[a] || []).length;
       });
       const overallPct = totalApplicable > 0 ? Math.round((totalComplete / totalApplicable) * 100) : 0;
       const startD = document.getElementById('startDate').value;
@@ -412,10 +490,11 @@
       // JSON.stringify()/quoting an activity name directly into an
       // onclick="..." attribute breaks the HTML (the attribute is also
       // double-quoted) and silently kills the click handler.
+      const filteredPC = getFilteredPeriodCompletions();
       grid.innerHTML = DATA.activities.map(function (a) {
         const o = overallFor(a);
         const pct = o.applicable > 0 ? o.complete / o.applicable : 0;
-        const periodCount = (DATA.periodCompletions[a] || []).length;
+        const periodCount = (filteredPC[a] || []).length;
         return '<div class="gauge-card" data-activity="' + escapeHtml(a) + '">' +
           '<div class="act-name">' + escapeHtml(a) + '</div>' +
           '<div class="gauge-fig">' + gaugeSvg(pct) + '</div>' +
@@ -430,9 +509,10 @@
     }
 
     function renderProjectBreakdown() {
+      const filteredPC = getFilteredPeriodCompletions();
       const totals = {}; // project -> count
       DATA.activities.forEach(function (a) {
-        (DATA.periodCompletions[a] || []).forEach(function (j) {
+        (filteredPC[a] || []).forEach(function (j) {
           const p = j.project || '(no project)';
           totals[p] = (totals[p] || 0) + 1;
         });
@@ -462,8 +542,12 @@
     /** Drill-down: completed (from periodCompletions, with date) + remaining
      *  (live rows where the activity applies but isn't complete yet). */
     function openDrilldown(activity) {
-      const completed = (DATA.periodCompletions[activity] || []);
-      const remaining = DATA.liveRows.filter(function (r) { return r.applies[activity] && !r.complete[activity]; });
+      const completed = (getFilteredPeriodCompletions()[activity] || []);
+      const remaining = getFilteredLiveRows().filter(function (r) { return r.applies[activity] && !r.complete[activity]; });
+
+      currentDrilldownActivity = activity;
+      currentCompletedRows = completed;
+      currentRemainingRows = remaining;
 
       document.getElementById('modalTitle').innerText = activity + ' - Drill Down';
       document.getElementById('completedHeading').innerText = 'Completed this period (' + completed.length + ')';
@@ -496,6 +580,30 @@
 
     function closeDrilldown() {
       document.getElementById('modalOverlay').style.display = 'none';
+    }
+
+    /** Exports exactly what's showing in the open drill-down modal - the
+     *  Completed (with date) and Remaining lists, each as their own sheet -
+     *  already reflecting the Cost Center filter if one is set. */
+    function exportDrilldown() {
+      if (!currentDrilldownActivity) return;
+      const completedRows = [['Cost Center', 'CTR#', 'Project', 'DWG Ref.', 'Join No.', 'Size', 'Date']];
+      currentCompletedRows.forEach(function (r) {
+        completedRows.push([r.costCenter, r.ctrNum, r.project, r.dwgRef, r.joinNo, r.size, r.date]);
+      });
+      const remainingRows = [['Cost Center', 'CTR#', 'Project', 'DWG Ref.', 'Join No.', 'Size']];
+      currentRemainingRows.forEach(function (r) {
+        remainingRows.push([r.costCenter, r.ctrNum, r.project, r.dwgRef, r.joinNo, r.size]);
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(completedRows), 'Completed');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(remainingRows), 'Remaining');
+
+      const startD = document.getElementById('startDate').value || daysAgoStr(7);
+      const endD = document.getElementById('endDate').value || todayStr();
+      const safeActivity = currentDrilldownActivity.replace(/[^a-z0-9]+/gi, '_');
+      XLSX.writeFile(wb, 'Piping_Productivity_' + safeActivity + '_' + startD + '_to_' + endD + '.xlsx');
     }
 
     function setStatus(text, cls) {
