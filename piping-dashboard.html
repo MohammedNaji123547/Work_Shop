@@ -89,6 +89,17 @@
   #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
   #authError { display: none; color: #C0392B; }
   #emptyState { padding: 30px; text-align: center; color: var(--grey); display: none; }
+
+  /* Fabrication / Welding summary cards - reflect whatever rows are
+     currently visible under the active filters + Start/End Period. */
+  #summaryBar { display: none; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .summary-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+  .summary-card h3 { margin: 0 0 10px; font-size: 14px; color: var(--navy); }
+  .summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .summary-stat { text-align: center; }
+  .summary-stat .stat-value { font-size: 20px; font-weight: 700; color: var(--navy); }
+  .summary-stat.stat-done .stat-value { color: var(--green); }
+  .summary-stat .stat-label { font-size: 10.5px; color: var(--grey); margin-top: 3px; text-transform: uppercase; letter-spacing: .2px; }
 </style>
 </head>
 <body>
@@ -167,6 +178,7 @@
     <main>
       <div id="loading">Loading dashboard...</div>
       <div id="authError">Could not load data. Check that APPS_SCRIPT_URL, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
+      <div id="summaryBar"></div>
       <div id="emptyState">No rows match the current filters.</div>
       <table id="boqTable" style="display:none">
         <thead><tr id="headRow"></tr></thead>
@@ -300,6 +312,7 @@
           applyFilters();
           document.getElementById('loading').style.display = 'none';
           document.getElementById('boqTable').style.display = 'table';
+          document.getElementById('summaryBar').style.display = 'grid';
           setStatus('Loaded ' + ROWS.length + ' row(s).', 'ok');
         })
         .catch(function (err) {
@@ -475,6 +488,62 @@
       });
       document.getElementById('emptyState').style.display = visibleCount === 0 ? 'block' : 'none';
       narrowFilterOptions();
+      renderSummary();
+    }
+
+    /** Same set of rows applyFilters() just made visible in the table -
+     *  recomputed directly against the ROWS data (not the DOM) so the
+     *  Fabrication/Welding summary cards below the filters can sum raw
+     *  numbers (Size, achieved) rather than parsing rendered cell text. */
+    function getVisibleRows() {
+      const values = getActiveFilterValues();
+      const notStartedOnly = document.getElementById('filterNotStarted').checked;
+      return ROWS.filter(function (r) {
+        return rowMatchesFilters(r, values, null) && (!notStartedOnly || isNotStarted(r));
+      });
+    }
+
+    /** Total Joint = rows where this activity applies (value isn't null).
+     *  Done = of those, achieved equals Size (fully complete - Fabrication/
+     *  Welding are binary, so this is the same "done" test used for the
+     *  green done-cell styling in the table). Total/Completed Dia-Inch sum
+     *  the Size (in inches) of the applicable/done rows respectively - the
+     *  standard piping "diameter-inch" productivity measure. */
+    function computeActivitySummary(rows, valueKey, sizeKey) {
+      let totalJoint = 0, done = 0, totalDia = 0, doneDia = 0;
+      rows.forEach(function (r) {
+        const val = r[valueKey];
+        if (val === null || val === undefined) return; // activity doesn't apply to this row
+        const size = Number(r[sizeKey]) || 0;
+        totalJoint++;
+        totalDia += size;
+        if (size > 0 && val === size) {
+          done++;
+          doneDia += size;
+        }
+      });
+      return { totalJoint: totalJoint, done: done, totalDia: totalDia, doneDia: doneDia };
+    }
+
+    function formatNum(n) {
+      return (Math.round(n * 100) / 100).toString();
+    }
+
+    function summaryCardHtml(title, s) {
+      return '<div class="summary-card"><h3>' + escapeHtml(title) + '</h3><div class="summary-stats">' +
+        '<div class="summary-stat"><div class="stat-value">' + s.totalJoint + '</div><div class="stat-label">Total Joint</div></div>' +
+        '<div class="summary-stat stat-done"><div class="stat-value">' + s.done + '</div><div class="stat-label">Done</div></div>' +
+        '<div class="summary-stat"><div class="stat-value">' + formatNum(s.totalDia) + '</div><div class="stat-label">Total Dia-Inch</div></div>' +
+        '<div class="summary-stat stat-done"><div class="stat-value">' + formatNum(s.doneDia) + '</div><div class="stat-label">Completed Dia-Inch</div></div>' +
+        '</div></div>';
+    }
+
+    function renderSummary() {
+      const rows = getVisibleRows();
+      const fab = computeActivitySummary(rows, 'fabrication', 'fabricationSize');
+      const weld = computeActivitySummary(rows, 'welding', 'weldingSize');
+      document.getElementById('summaryBar').innerHTML =
+        summaryCardHtml('Fabrication', fab) + summaryCardHtml('Welding', weld);
     }
 
     /** Resets the six cross-narrowing filters and the "Not started" toggle
