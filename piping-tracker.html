@@ -400,7 +400,7 @@
       const head = document.getElementById('headRow');
       let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th>' +
         '<th class="left">DWG Ref.</th>' +
-        '<th class="left">Spool No.</th><th class="left">Join No.</th><th class="left">Join Type</th><th>Size</th>' +
+        '<th class="left">Spool No.</th><th class="left">Join No.</th><th class="left">Join Type</th><th>Size</th><th>SCH</th>' +
         '<th class="left">Material Type</th><th class="left">Welding Type</th>' +
         '<th class="th-count">Fabrication</th><th class="th-count">Welding</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
@@ -437,6 +437,7 @@
         html += '<td class="left">' + escapeHtml(r.joinNo) + '</td>';
         html += '<td class="left">' + escapeHtml(r.joinType) + '</td>';
         html += '<td>' + (r.size != null ? r.size : '') + '</td>';
+        html += '<td>' + escapeHtml(r.sch) + '</td>';
         html += '<td class="left">' + escapeHtml(r.materialType) + '</td>';
         html += '<td class="left">' + escapeHtml(r.weldingType) + '</td>';
 
