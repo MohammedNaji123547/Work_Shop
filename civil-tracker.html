@@ -309,7 +309,7 @@
 
     function renderHead() {
       const head = document.getElementById('headRow');
-      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th class="left">Price Method</th><th>Qty (m3)</th><th>Weighted</th>';
+      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th class="left">Price Method</th><th>No.</th><th>Qty (m3)</th><th>Weighted</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th>Overall %</th><th>Status</th>';
       head.innerHTML = html;
@@ -337,8 +337,9 @@
         html += '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td class="left">' + escapeHtml(r.priceMethod) + '</td>';
-        html += '<td>' + (r.qty != null && r.qty !== '' ? Number(r.qty).toFixed(2) : '') + '</td>';
-        html += '<td>' + (r.weighted != null && r.weighted !== '' ? Number(r.weighted).toFixed(2) : '') + '</td>';
+        html += '<td>' + (r.no != null ? r.no : '') + '</td>';
+        html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
+        html += '<td>' + (r.weighted != null && r.weighted !== '' ? r.weighted : '') + '</td>';
 
         for (let s = 0; s < STEP_COUNT; s++) {
           const currentVal = Math.round((r.steps[s] || 0) * 100);
