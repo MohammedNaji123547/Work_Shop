@@ -95,10 +95,11 @@
   #summaryBar { display: none; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 14px; }
   .summary-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
   .summary-card h3 { margin: 0 0 10px; font-size: 14px; color: var(--navy); }
-  .summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .summary-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
   .summary-stat { text-align: center; }
   .summary-stat .stat-value { font-size: 20px; font-weight: 700; color: var(--navy); }
   .summary-stat.stat-done .stat-value { color: var(--green); }
+  .summary-stat.stat-pct .stat-value { color: var(--amber); }
   .summary-stat .stat-label { font-size: 10.5px; color: var(--grey); margin-top: 3px; text-transform: uppercase; letter-spacing: .2px; }
 </style>
 </head>
@@ -117,7 +118,6 @@
         <div class="sub">Read-only progress report for a selected period, reconstructed from the Change Log.</div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;">
-        <a href="piping-productivity.html" style="color:#fff;font-size:12px;">Productivity Review</a>
         <span id="signedInAs" style="font-size:12px;opacity:0.85;"></span>
         <a href="#" onclick="signOut();return false;" style="color:#fff;font-size:12px;">Sign out</a>
       </div>
@@ -531,11 +531,13 @@
     }
 
     function summaryCardHtml(title, s) {
+      const pct = s.totalDia > 0 ? Math.round((s.doneDia / s.totalDia) * 100) : 0;
       return '<div class="summary-card"><h3>' + escapeHtml(title) + '</h3><div class="summary-stats">' +
         '<div class="summary-stat"><div class="stat-value">' + s.totalJoint + '</div><div class="stat-label">Total Joint</div></div>' +
         '<div class="summary-stat stat-done"><div class="stat-value">' + s.done + '</div><div class="stat-label">Done</div></div>' +
         '<div class="summary-stat"><div class="stat-value">' + formatNum(s.totalDia) + '</div><div class="stat-label">Total Dia-Inch</div></div>' +
         '<div class="summary-stat stat-done"><div class="stat-value">' + formatNum(s.doneDia) + '</div><div class="stat-label">Completed Dia-Inch</div></div>' +
+        '<div class="summary-stat stat-pct"><div class="stat-value">' + pct + '%</div><div class="stat-label">% Complete</div></div>' +
         '</div></div>';
     }
 
