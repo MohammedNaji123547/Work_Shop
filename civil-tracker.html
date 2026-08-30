@@ -338,8 +338,8 @@
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td class="left">' + escapeHtml(r.priceMethod) + '</td>';
         html += '<td>' + (r.no != null ? r.no : '') + '</td>';
-        html += '<td>' + (r.qty != null ? r.qty : '') + '</td>';
-        html += '<td>' + (r.weighted != null && r.weighted !== '' ? r.weighted : '') + '</td>';
+        html += '<td>' + formatNum2(r.qty) + '</td>';
+        html += '<td>' + formatNum2(r.weighted) + '</td>';
 
         for (let s = 0; s < STEP_COUNT; s++) {
           const currentVal = Math.round((r.steps[s] || 0) * 100);
@@ -357,6 +357,15 @@
         tr.innerHTML = html;
         body.appendChild(tr);
       });
+    }
+
+    /** Qty (m3) and Weighted are decimal values from the sheet - display
+     *  them fixed to 2 decimal places instead of whatever raw precision the
+     *  sheet happens to store, blank if not a real number. */
+    function formatNum2(v) {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Number(v);
+      return isNaN(n) ? '' : n.toFixed(2);
     }
 
     function statusClass(s) {
