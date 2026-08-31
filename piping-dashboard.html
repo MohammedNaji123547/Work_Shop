@@ -105,7 +105,11 @@
   /* Welding-by-SCH breakdown - sits above the Fabrication/Welding cards,
      same filtered-rows behavior. */
   #schBreakdownSection { display: none; margin-bottom: 14px; }
-  #schBreakdownSection h2 { font-size: 15px; margin: 0 0 8px; color: var(--navy); }
+  #schBreakdownSection h2 { font-size: 15px; margin: 0; color: var(--navy); }
+  #schExportBtn {
+    background: var(--green); color: #fff; border: none; padding: 7px 14px; border-radius: 5px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
   table.sch-table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; }
   table.sch-table th, table.sch-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; white-space: nowrap; }
   table.sch-table th { background: var(--navy-light); color: var(--navy); font-weight: 600; }
@@ -192,7 +196,10 @@
       <div id="loading">Loading dashboard...</div>
       <div id="authError">Could not load data. Check that APPS_SCRIPT_URL, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
       <div id="schBreakdownSection">
-        <h2>Welding Progress by SCH</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2>Welding Progress by SCH</h2>
+          <button id="schExportBtn" onclick="exportSchBreakdown()">Export to Excel</button>
+        </div>
         <div id="schBreakdown"></div>
       </div>
       <div id="summaryBar"></div>
@@ -213,6 +220,10 @@
     const KEY = '246558e10ddec9f6ba40df8f';
     const OAUTH_CLIENT_ID = '334099659239-k56hp1qouqpgamdcen7mahqa40rjtia1.apps.googleusercontent.com';
     // --------------------------------------------------------------
+
+    // Default Start Period - End Period always defaults to today (see
+    // todayStr() below).
+    const DEFAULT_START_DATE = '2026-05-01';
 
     let idToken = null;
     let signedInEmail = '';
@@ -246,7 +257,7 @@
       if (alreadySignedIn) return; // silent background token refresh, see below
       document.getElementById('signInScreen').style.display = 'none';
       document.getElementById('appScreen').style.display = 'block';
-      document.getElementById('startDate').value = daysAgoStr(7);
+      document.getElementById('startDate').value = DEFAULT_START_DATE;
       document.getElementById('endDate').value = todayStr();
       loadDashboard();
       startSilentTokenRefresh();
@@ -313,7 +324,7 @@
 
       const body = {
         key: KEY, token: idToken, action: 'dashboardPeriod',
-        startDate: document.getElementById('startDate').value || daysAgoStr(7),
+        startDate: document.getElementById('startDate').value || DEFAULT_START_DATE,
         endDate: document.getElementById('endDate').value || todayStr()
       };
 
@@ -639,6 +650,28 @@
       container.innerHTML = html;
     }
 
+    /** Exports the pivot exactly as shown - SCH group, each Size row, and
+     *  its Subtotal row - regardless of what's currently on screen (it
+     *  recomputes from the same filtered rows renderSchBreakdown() used). */
+    function exportSchBreakdown() {
+      const data = computeSchSizeBreakdown(getVisibleRows());
+      const rows = [['SCH', 'Size', 'Total Dia-Inch', 'Welded Dia-Inch', '% Complete']];
+      data.forEach(function (schGroup) {
+        schGroup.sizes.forEach(function (row) {
+          const pct = row.total > 0 ? Math.round((row.welded / row.total) * 100) : 0;
+          rows.push([schGroup.sch, row.size, formatNum(row.total), formatNum(row.welded), pct + '%']);
+        });
+        const schPct = schGroup.total > 0 ? Math.round((schGroup.welded / schGroup.total) * 100) : 0;
+        rows.push([schGroup.sch, 'Subtotal', formatNum(schGroup.total), formatNum(schGroup.welded), schPct + '%']);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Welding by SCH');
+      const startD = document.getElementById('startDate').value || DEFAULT_START_DATE;
+      const endD = document.getElementById('endDate').value || todayStr();
+      XLSX.writeFile(wb, 'Piping_Welding_by_SCH_' + startD + '_to_' + endD + '.xlsx');
+    }
+
     /** Resets the six cross-narrowing filters and the "Not started" toggle
      *  back to "show everything" - does NOT touch Start/End Period, since
      *  that's the report window itself rather than a row filter. */
@@ -669,7 +702,7 @@
       const ws = XLSX.utils.aoa_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
-      const startD = document.getElementById('startDate').value || daysAgoStr(7);
+      const startD = document.getElementById('startDate').value || DEFAULT_START_DATE;
       const endD = document.getElementById('endDate').value || todayStr();
       XLSX.writeFile(wb, 'Piping_Dashboard_' + startD + '_to_' + endD + '.xlsx');
     }
