@@ -101,6 +101,17 @@
   .summary-stat.stat-done .stat-value { color: var(--green); }
   .summary-stat.stat-pct .stat-value { color: var(--amber); }
   .summary-stat .stat-label { font-size: 10.5px; color: var(--grey); margin-top: 3px; text-transform: uppercase; letter-spacing: .2px; }
+
+  /* Welding-by-SCH breakdown - sits above the Fabrication/Welding cards,
+     same filtered-rows behavior. */
+  #schBreakdownSection { display: none; margin-bottom: 14px; }
+  #schBreakdownSection h2 { font-size: 15px; margin: 0 0 8px; color: var(--navy); }
+  table.sch-table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; }
+  table.sch-table th, table.sch-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; white-space: nowrap; }
+  table.sch-table th { background: var(--navy-light); color: var(--navy); font-weight: 600; }
+  table.sch-table td.left, table.sch-table th.left { text-align: left; }
+  table.sch-table td.pct-cell { font-weight: 700; color: var(--green); }
+  #schBreakdownEmpty { padding: 12px; text-align: center; color: var(--grey); font-size: 12.5px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -156,9 +167,9 @@
         <datalist id="dwgRefList"></datalist>
       </div>
       <div class="filter-group">
-        <span class="filter-label">Join No.</span>
-        <input id="filterJoinNo" class="filter-input" type="text" list="joinNoList" placeholder="All joints" autocomplete="off">
-        <datalist id="joinNoList"></datalist>
+        <span class="filter-label">Join Type</span>
+        <input id="filterJoinType" class="filter-input" type="text" list="joinTypeList" placeholder="All join types" autocomplete="off">
+        <datalist id="joinTypeList"></datalist>
       </div>
       <div class="filter-group">
         <span class="filter-label">Material Type</span>
@@ -178,6 +189,10 @@
     <main>
       <div id="loading">Loading dashboard...</div>
       <div id="authError">Could not load data. Check that APPS_SCRIPT_URL, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
+      <div id="schBreakdownSection">
+        <h2>Welding Progress by SCH</h2>
+        <div id="schBreakdown"></div>
+      </div>
       <div id="summaryBar"></div>
       <div id="emptyState">No rows match the current filters.</div>
       <table id="boqTable" style="display:none">
@@ -313,6 +328,7 @@
           document.getElementById('loading').style.display = 'none';
           document.getElementById('boqTable').style.display = 'table';
           document.getElementById('summaryBar').style.display = 'grid';
+          document.getElementById('schBreakdownSection').style.display = 'block';
           setStatus('Loaded ' + ROWS.length + ' row(s).', 'ok');
         })
         .catch(function (err) {
@@ -335,7 +351,7 @@
       fill('ctrNumList', uniq(function (r) { return r.ctrNum; }));
       fill('projectList', uniq(function (r) { return r.project; }));
       fill('dwgRefList', uniq(function (r) { return r.dwgRef; }));
-      fill('joinNoList', uniq(function (r) { return r.joinNo; }));
+      fill('joinTypeList', uniq(function (r) { return r.joinType; }));
       fill('materialTypeList', uniq(function (r) { return r.materialType; }));
     }
 
@@ -392,7 +408,7 @@
         tr.dataset.ctrNum = String(r.ctrNum || '').toLowerCase();
         tr.dataset.project = String(r.project || '').toLowerCase();
         tr.dataset.dwgRef = String(r.dwgRef || '').toLowerCase();
-        tr.dataset.joinNo = String(r.joinNo || '').toLowerCase();
+        tr.dataset.joinType = String(r.joinType || '').toLowerCase();
         tr.dataset.materialType = String(r.materialType || '').toLowerCase();
         tr.dataset.notStarted = isNotStarted(r) ? '1' : '0';
 
@@ -433,7 +449,7 @@
       ctrNum: { inputId: 'filterCtrNum', listId: 'ctrNumList' },
       project: { inputId: 'filterProject', listId: 'projectList' },
       dwgRef: { inputId: 'filterDwgRef', listId: 'dwgRefList' },
-      joinNo: { inputId: 'filterJoinNo', listId: 'joinNoList' },
+      joinType: { inputId: 'filterJoinType', listId: 'joinTypeList' },
       materialType: { inputId: 'filterMaterialType', listId: 'materialTypeList' }
     };
 
@@ -481,7 +497,7 @@
           (!values.ctrNum || tr.dataset.ctrNum.indexOf(values.ctrNum) !== -1) &&
           (!values.project || tr.dataset.project.indexOf(values.project) !== -1) &&
           (!values.dwgRef || tr.dataset.dwgRef.indexOf(values.dwgRef) !== -1) &&
-          (!values.joinNo || tr.dataset.joinNo.indexOf(values.joinNo) !== -1) &&
+          (!values.joinType || tr.dataset.joinType.indexOf(values.joinType) !== -1) &&
           (!values.materialType || tr.dataset.materialType.indexOf(values.materialType) !== -1) &&
           (!notStartedOnly || tr.dataset.notStarted === '1');
         tr.style.display = matches ? '' : 'none';
@@ -490,6 +506,7 @@
       document.getElementById('emptyState').style.display = visibleCount === 0 ? 'block' : 'none';
       narrowFilterOptions();
       renderSummary();
+      renderSchBreakdown();
     }
 
     /** Same set of rows applyFilters() just made visible in the table -
@@ -547,6 +564,48 @@
       const weld = computeActivitySummary(rows, 'welding', 'weldingSize');
       document.getElementById('summaryBar').innerHTML =
         summaryCardHtml('Fabrication', fab) + summaryCardHtml('Welding', weld);
+    }
+
+    /** Welding progress broken down by SCH - one row per distinct SCH value
+     *  among the currently visible rows where Welding applies: Total Dia-
+     *  Inch (sum of Size for every joint with that SCH), Welded Dia-Inch
+     *  (sum of Size for the ones already welded), and % Complete. Rows
+     *  where Welding doesn't apply are excluded entirely, same as the
+     *  Welding summary card above. */
+    function computeSchBreakdown(rows) {
+      const totals = {}; // sch label -> { total, welded }
+      rows.forEach(function (r) {
+        if (r.welding === null || r.welding === undefined) return; // Welding doesn't apply to this row
+        const schLabel = (r.sch === null || r.sch === undefined || r.sch === '') ? '(no SCH)' : String(r.sch);
+        const size = Number(r.weldingSize) || 0;
+        if (!totals[schLabel]) totals[schLabel] = { total: 0, welded: 0 };
+        totals[schLabel].total += size;
+        if (size > 0 && r.welding === size) totals[schLabel].welded += size;
+      });
+      return Object.keys(totals)
+        .map(function (sch) { return { sch: sch, total: totals[sch].total, welded: totals[sch].welded }; })
+        .sort(function (a, b) { return a.sch.localeCompare(b.sch, undefined, { numeric: true, sensitivity: 'base' }); });
+    }
+
+    function renderSchBreakdown() {
+      const data = computeSchBreakdown(getVisibleRows());
+      const container = document.getElementById('schBreakdown');
+      if (data.length === 0) {
+        container.innerHTML = '<div id="schBreakdownEmpty">No welding-applicable rows in the current filters.</div>';
+        return;
+      }
+      let html = '<table class="sch-table"><thead><tr>' +
+        '<th class="left">SCH</th><th>Total Dia-Inch</th><th>Welded Dia-Inch</th><th>% Complete</th>' +
+        '</tr></thead><tbody>';
+      data.forEach(function (d) {
+        const pct = d.total > 0 ? Math.round((d.welded / d.total) * 100) : 0;
+        html += '<tr><td class="left">' + escapeHtml(d.sch) + '</td>' +
+          '<td>' + formatNum(d.total) + '</td>' +
+          '<td>' + formatNum(d.welded) + '</td>' +
+          '<td class="pct-cell">' + pct + '%</td></tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
     }
 
     /** Resets the six cross-narrowing filters and the "Not started" toggle
