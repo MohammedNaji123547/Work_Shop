@@ -111,6 +111,8 @@
   table.sch-table th { background: var(--navy-light); color: var(--navy); font-weight: 600; }
   table.sch-table td.left, table.sch-table th.left { text-align: left; }
   table.sch-table td.pct-cell { font-weight: 700; color: var(--green); }
+  table.sch-table td.sch-cell { font-weight: 700; color: var(--navy); vertical-align: middle; background: var(--navy-light); }
+  table.sch-table tr.sch-subtotal-row td { font-weight: 700; background: #F5F7FA; }
   #schBreakdownEmpty { padding: 12px; text-align: center; color: var(--grey); font-size: 12.5px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
 </style>
 </head>
@@ -566,43 +568,72 @@
         summaryCardHtml('Fabrication', fab) + summaryCardHtml('Welding', weld);
     }
 
-    /** Welding progress broken down by SCH - one row per distinct SCH value
-     *  among the currently visible rows where Welding applies: Total Dia-
-     *  Inch (sum of Size for every joint with that SCH), Welded Dia-Inch
-     *  (sum of Size for the ones already welded), and % Complete. Rows
-     *  where Welding doesn't apply are excluded entirely, same as the
+    function naturalSort(a, b) {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    /** Welding progress as a pivot: SCH as the outer group, Size as the
+     *  inner rows within each SCH - Total Dia-Inch (sum of Size for every
+     *  joint of that Size/SCH), Welded Dia-Inch (sum of Size for the ones
+     *  already welded), and % Complete, plus a bold subtotal row per SCH.
+     *  Rows where Welding doesn't apply are excluded entirely, same as the
      *  Welding summary card above. */
-    function computeSchBreakdown(rows) {
-      const totals = {}; // sch label -> { total, welded }
+    function computeSchSizeBreakdown(rows) {
+      const schMap = {}; // sch label -> { sizes: { size label -> {total, welded} }, total, welded }
       rows.forEach(function (r) {
         if (r.welding === null || r.welding === undefined) return; // Welding doesn't apply to this row
         const schLabel = (r.sch === null || r.sch === undefined || r.sch === '') ? '(no SCH)' : String(r.sch);
-        const size = Number(r.weldingSize) || 0;
-        if (!totals[schLabel]) totals[schLabel] = { total: 0, welded: 0 };
-        totals[schLabel].total += size;
-        if (size > 0 && r.welding === size) totals[schLabel].welded += size;
+        const sizeLabel = (r.size === null || r.size === undefined || r.size === '') ? '(no size)' : String(r.size);
+        const dia = Number(r.weldingSize) || 0;
+        const isWelded = dia > 0 && r.welding === dia;
+
+        if (!schMap[schLabel]) schMap[schLabel] = { sizes: {}, total: 0, welded: 0 };
+        const schEntry = schMap[schLabel];
+        if (!schEntry.sizes[sizeLabel]) schEntry.sizes[sizeLabel] = { total: 0, welded: 0 };
+        schEntry.sizes[sizeLabel].total += dia;
+        schEntry.total += dia;
+        if (isWelded) {
+          schEntry.sizes[sizeLabel].welded += dia;
+          schEntry.welded += dia;
+        }
       });
-      return Object.keys(totals)
-        .map(function (sch) { return { sch: sch, total: totals[sch].total, welded: totals[sch].welded }; })
-        .sort(function (a, b) { return a.sch.localeCompare(b.sch, undefined, { numeric: true, sensitivity: 'base' }); });
+
+      return Object.keys(schMap).sort(naturalSort).map(function (sch) {
+        const entry = schMap[sch];
+        const sizes = Object.keys(entry.sizes).sort(naturalSort).map(function (size) {
+          return { size: size, total: entry.sizes[size].total, welded: entry.sizes[size].welded };
+        });
+        return { sch: sch, sizes: sizes, total: entry.total, welded: entry.welded };
+      });
     }
 
     function renderSchBreakdown() {
-      const data = computeSchBreakdown(getVisibleRows());
+      const data = computeSchSizeBreakdown(getVisibleRows());
       const container = document.getElementById('schBreakdown');
       if (data.length === 0) {
         container.innerHTML = '<div id="schBreakdownEmpty">No welding-applicable rows in the current filters.</div>';
         return;
       }
       let html = '<table class="sch-table"><thead><tr>' +
-        '<th class="left">SCH</th><th>Total Dia-Inch</th><th>Welded Dia-Inch</th><th>% Complete</th>' +
+        '<th class="left">SCH</th><th class="left">Size</th><th>Total Dia-Inch</th><th>Welded Dia-Inch</th><th>% Complete</th>' +
         '</tr></thead><tbody>';
-      data.forEach(function (d) {
-        const pct = d.total > 0 ? Math.round((d.welded / d.total) * 100) : 0;
-        html += '<tr><td class="left">' + escapeHtml(d.sch) + '</td>' +
-          '<td>' + formatNum(d.total) + '</td>' +
-          '<td>' + formatNum(d.welded) + '</td>' +
-          '<td class="pct-cell">' + pct + '%</td></tr>';
+      data.forEach(function (schGroup) {
+        schGroup.sizes.forEach(function (row, i) {
+          const pct = row.total > 0 ? Math.round((row.welded / row.total) * 100) : 0;
+          html += '<tr>';
+          if (i === 0) {
+            html += '<td class="left sch-cell" rowspan="' + (schGroup.sizes.length + 1) + '">' + escapeHtml(schGroup.sch) + '</td>';
+          }
+          html += '<td class="left">' + escapeHtml(row.size) + '</td>' +
+            '<td>' + formatNum(row.total) + '</td>' +
+            '<td>' + formatNum(row.welded) + '</td>' +
+            '<td class="pct-cell">' + pct + '%</td></tr>';
+        });
+        const schPct = schGroup.total > 0 ? Math.round((schGroup.welded / schGroup.total) * 100) : 0;
+        html += '<tr class="sch-subtotal-row"><td class="left">Subtotal</td>' +
+          '<td>' + formatNum(schGroup.total) + '</td>' +
+          '<td>' + formatNum(schGroup.welded) + '</td>' +
+          '<td class="pct-cell">' + schPct + '%</td></tr>';
       });
       html += '</tbody></table>';
       container.innerHTML = html;
