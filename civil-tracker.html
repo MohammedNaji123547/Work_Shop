@@ -309,7 +309,7 @@
 
     function renderHead() {
       const head = document.getElementById('headRow');
-      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th class="left">Price Method</th><th>No.</th><th>Qty (m3)</th><th>Weighted</th>';
+      let html = '<th class="left">Cost Center</th><th class="left">CTR#</th><th class="left">Project</th><th class="left">Foundation Type</th><th class="left">Foundation Ref.</th><th class="left">Component</th><th class="left">Price Method</th><th>No.</th><th>Qty (m3)</th><th>Weighted</th>';
       SHORT_LABELS.forEach(function (l) { html += '<th>' + l + '</th>'; });
       html += '<th>Overall %</th><th>Status</th>';
       head.innerHTML = html;
@@ -334,6 +334,7 @@
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
         html += '<td class="left">' + escapeHtml(r.project) + '</td>';
+        html += '<td class="left">' + escapeHtml(r.foundationType) + '</td>';
         html += '<td class="left">' + escapeHtml(r.foundationRef) + '</td>';
         html += '<td class="left">' + escapeHtml(r.component) + '</td>';
         html += '<td class="left">' + escapeHtml(r.priceMethod) + '</td>';
