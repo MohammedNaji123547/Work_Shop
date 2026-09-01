@@ -78,6 +78,22 @@
   #loading, #authError { padding: 40px; text-align: center; color: var(--grey); }
   #authError { display: none; color: #C0392B; }
   #emptyState { padding: 30px; text-align: center; color: var(--grey); display: none; }
+
+  /* Concrete progress summary, grouped by Cost Center / Project / Component -
+     sits above the detail table, reflects whatever rows are visible under
+     the active filters. */
+  #groupSummarySection { display: none; margin-bottom: 14px; }
+  #groupSummarySection h2 { font-size: 15px; margin: 0; color: var(--navy); }
+  #groupExportBtn {
+    background: var(--green); color: #fff; border: none; padding: 7px 14px; border-radius: 5px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  table.summary-table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; }
+  table.summary-table th, table.summary-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; white-space: nowrap; }
+  table.summary-table th { background: var(--navy-light); color: var(--navy); font-weight: 600; }
+  table.summary-table td.left, table.summary-table th.left { text-align: left; }
+  table.summary-table td.pct-cell { font-weight: 700; color: var(--green); }
+  #groupSummaryEmpty { padding: 12px; text-align: center; color: var(--grey); font-size: 12.5px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -135,6 +151,13 @@
     <main>
       <div id="loading">Loading Civil BOQ...</div>
       <div id="authError">Could not load data. Check that APPS_SCRIPT_URL, KEY and OAUTH_CLIENT_ID at the top of this file are correct and the Apps Script deployment is set to "Anyone" access.</div>
+      <div id="groupSummarySection">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2>Concrete Progress by Cost Center / Project / Component</h2>
+          <button id="groupExportBtn" onclick="exportGroupSummary()">Export to Excel</button>
+        </div>
+        <div id="groupSummary"></div>
+      </div>
       <div id="emptyState">No rows match the current filters.</div>
       <table id="boqTable" style="display:none">
         <thead><tr id="headRow"></tr></thead>
@@ -255,6 +278,7 @@
           applyFilters();
           document.getElementById('loading').style.display = 'none';
           document.getElementById('boqTable').style.display = 'table';
+          document.getElementById('groupSummarySection').style.display = 'block';
           setStatus('Loaded ' + ROWS.length + ' row(s).', 'ok');
         })
         .catch(function (err) {
@@ -396,6 +420,82 @@
       });
       document.getElementById('emptyState').style.display = visibleCount === 0 ? 'block' : 'none';
       narrowFilterOptions();
+      renderGroupSummary();
+    }
+
+    /** Same rows applyFilters() just made visible in the table, recomputed
+     *  directly against ROWS data (not the DOM) so the summary panel can sum
+     *  raw numbers rather than parsing rendered cell text. */
+    function getVisibleRows() {
+      const values = getActiveFilterValues();
+      return ROWS.filter(function (r) { return rowMatchesFilters(r, values, null); });
+    }
+
+    /** Groups rows by Cost Center + Project + Component. Total Concrete
+     *  Qty. sums each row's total volume (No. x Concrete Qty. per unit -
+     *  the same "Qu (M3)" value shown in the detail table). Completed
+     *  Concrete Qty. sums that same per-row volume multiplied by the row's
+     *  Pouring Concrete percentage (steps[2] - Steel Reinforcement,
+     *  Formwork, Pouring Concrete, Coating, Insert Plate/Anker Bolt, in
+     *  that order), i.e. the m3 actually poured so far. */
+    function computeGroupSummary(rows) {
+      const groups = {};
+      rows.forEach(function (r) {
+        const no = Number(r.no) || 0;
+        const concreteQtyPerUnit = Number(r.qty) || 0;
+        const quM3 = no * concreteQtyPerUnit;
+        const pouringPct = (r.steps && r.steps[2]) || 0; // 0-1 fraction
+        const completedM3 = quM3 * pouringPct;
+
+        const costCenter = r.costCenter || '';
+        const project = r.project || '';
+        const component = r.component || '';
+        const key = [costCenter, project, component].join('|').toLowerCase();
+        if (!groups[key]) groups[key] = { costCenter: costCenter, project: project, component: component, total: 0, completed: 0 };
+        groups[key].total += quM3;
+        groups[key].completed += completedM3;
+      });
+      return Object.keys(groups).map(function (k) { return groups[k]; }).sort(function (a, b) {
+        return (a.costCenter + '|' + a.project + '|' + a.component)
+          .localeCompare(b.costCenter + '|' + b.project + '|' + b.component, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
+
+    function renderGroupSummary() {
+      const data = computeGroupSummary(getVisibleRows());
+      const container = document.getElementById('groupSummary');
+      if (data.length === 0) {
+        container.innerHTML = '<div id="groupSummaryEmpty">No rows match the current filters.</div>';
+        return;
+      }
+      let html = '<table class="summary-table"><thead><tr>' +
+        '<th class="left">Cost Center</th><th class="left">Project</th><th class="left">Component</th>' +
+        '<th>Total Concrete Qty. (M3)</th><th>Completed Concrete Qty. (M3)</th><th>% Complete</th>' +
+        '</tr></thead><tbody>';
+      data.forEach(function (g) {
+        const pct = g.total > 0 ? Math.round((g.completed / g.total) * 100) : 0;
+        html += '<tr><td class="left">' + escapeHtml(g.costCenter) + '</td>' +
+          '<td class="left">' + escapeHtml(g.project) + '</td>' +
+          '<td class="left">' + escapeHtml(g.component) + '</td>' +
+          '<td>' + formatNum2(g.total) + '</td>' +
+          '<td>' + formatNum2(g.completed) + '</td>' +
+          '<td class="pct-cell">' + pct + '%</td></tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function exportGroupSummary() {
+      const data = computeGroupSummary(getVisibleRows());
+      const rows = [['Cost Center', 'Project', 'Component', 'Total Concrete Qty. (M3)', 'Completed Concrete Qty. (M3)', '% Complete']];
+      data.forEach(function (g) {
+        const pct = g.total > 0 ? Math.round((g.completed / g.total) * 100) : 0;
+        rows.push([g.costCenter, g.project, g.component, formatNum2(g.total), formatNum2(g.completed), pct + '%']);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Summary');
+      XLSX.writeFile(wb, 'Civil_Summary_by_Component_' + todayStr() + '.xlsx');
     }
 
     function clearFilters() {
