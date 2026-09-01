@@ -313,11 +313,8 @@
       head.innerHTML = html;
     }
 
-    /** Qu (M3) = QTY x Concrete Qty. - QTY here is the row's No. (count of
-     *  foundations of this type), and Concrete Qty. is the per-unit volume
-     *  already on the BOQ row (the same field civil-tracker.html shows as
-     *  "Qty (m3)"). This is computed here rather than read from the sheet's
-     *  own "Weighted" column, per your formula. */
+    /** Qu (M3) is just the row's Concrete Qty. value as-is (the same field
+     *  civil-tracker.html shows as "Qty (m3)") - NOT multiplied by QTY/No. */
     function formatNum2(v) {
       const n = Number(v);
       return isNaN(n) ? '' : n.toFixed(2);
@@ -336,8 +333,7 @@
         tr.dataset.component = String(r.component || '').toLowerCase();
 
         const no = Number(r.no) || 0;
-        const concreteQtyPerUnit = Number(r.qty) || 0;
-        const quM3 = no * concreteQtyPerUnit;
+        const quM3 = Number(r.qty) || 0;
 
         let html = '<td class="left">' + escapeHtml(r.costCenter) + '</td>';
         html += '<td class="left">' + escapeHtml(r.ctrNum) + '</td>';
@@ -432,18 +428,16 @@
     }
 
     /** Groups rows by Cost Center + Project + Component. Total Concrete
-     *  Qty. sums each row's total volume (No. x Concrete Qty. per unit -
-     *  the same "Qu (M3)" value shown in the detail table). Completed
-     *  Concrete Qty. sums that same per-row volume multiplied by the row's
-     *  Pouring Concrete percentage (steps[2] - Steel Reinforcement,
-     *  Formwork, Pouring Concrete, Coating, Insert Plate/Anker Bolt, in
-     *  that order), i.e. the m3 actually poured so far. */
+     *  Qty. sums each row's Concrete Qty. value as-is (the same "Qu (M3)"
+     *  value shown in the detail table). Completed Concrete Qty. sums that
+     *  same per-row value multiplied by the row's Pouring Concrete
+     *  percentage (steps[2] - Steel Reinforcement, Formwork, Pouring
+     *  Concrete, Coating, Insert Plate/Anker Bolt, in that order), i.e. the
+     *  m3 actually poured so far. */
     function computeGroupSummary(rows) {
       const groups = {};
       rows.forEach(function (r) {
-        const no = Number(r.no) || 0;
-        const concreteQtyPerUnit = Number(r.qty) || 0;
-        const quM3 = no * concreteQtyPerUnit;
+        const quM3 = Number(r.qty) || 0;
         const pouringPct = (r.steps && r.steps[2]) || 0; // 0-1 fraction
         const completedM3 = quM3 * pouringPct;
 
